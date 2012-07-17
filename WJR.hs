@@ -3,12 +3,13 @@
              TemplateHaskell, OverloadedStrings #-}
 import Imports
 import Yesod.Static (Static, Route(..), static)
-import Text.Hamlet (hamletFile)
+import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
 import Data.Traversable (sequenceA)
 import Data.List (delete)
 import Settings
 import Jobs
+
 
 bootstrap_css :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]    []
@@ -115,8 +116,11 @@ getDeleteJobR fname = do
      then notFound
      else do setSessionList jobsSession (Data.List.delete fname sess)
              liftIO $ deleteJob (T.unpack fname)
-             setMessage "Job Deleted"
+             setMessage $ msgLabel "Job Deleted"
              redirect RootR
+
+msgLabel :: Text -> Html
+msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
 
 handleNewR :: Handler RepHtml
 handleNewR = do
@@ -124,7 +128,7 @@ handleNewR = do
     case result of
         FormSuccess params -> do fname <- liftIO $ createJob params
                                  sess <- addToSessionList jobsSession fname
-                                 setMessage $ "Upload successful"
+                                 setMessage $ msgLabel "Job created."
                                  redirect RootR
         _ ->  defaultLayout [whamlet|
 <h1>Create New Job
