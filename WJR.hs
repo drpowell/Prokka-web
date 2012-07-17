@@ -1,3 +1,4 @@
+#!/usr/bin/env runghc
 {-# LANGUAGE TypeFamilies, QuasiQuotes, MultiParamTypeClasses,
              TemplateHaskell, OverloadedStrings #-}
 import Imports
