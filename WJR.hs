@@ -9,6 +9,7 @@ import Data.Traversable (sequenceA)
 import Data.List (delete)
 import Settings
 import Jobs
+import Network.Wai
 
 
 bootstrap_css :: Route Static
@@ -95,39 +96,52 @@ getRootR = do
                     <a href=@{NewR}>Create New Job
                  |]
 
-getJobR :: Text -> Handler RepHtml
-getJobR fname = do
+getJobR :: JobID -> Handler RepHtml
+getJobR jobId = do
   sess <- getSessionList jobsSession
-  if fname `notElem` sess
+  if jobId `notElem` sess
      then notFound
-     else do params <- liftIO $ infoJob (T.unpack fname)
-             defaultLayout [whamlet|<p>Job : #{fname}
-                                    <p>Parameters
-                                    $forall (key,val) <- params
-                                       <li><b>#{key}</b>: #{val}
-                                    <p>
-                                      <a href=@{DeleteJobR fname}>Delete Job
-                            |]
+     else do job <- liftIO $ infoJob jobId
+             case job of
+               Nothing -> defaultLayout [whamlet|<p>Job not found|]
+               Just job -> let params = jobParams job
+                               status :: Text
+                               status = case jobStatus job of
+                                          JobWaiting -> "Waiting"
+                                          JobRunning _ -> "Running..."
+                                          JobComplete _ -> "Finished"
+                           in defaultLayout [whamlet|<p>Job : #{jobId}
+                                                     <p>Status : #{status}
+                                                     <p>Parameters
+                                                     $forall (key,val) <- params
+                                                       <li><b>#{key}</b>: #{val}
+                                                     <p>
+                                                     <a href=@{DeleteJobR jobId}>Delete Job
+                                             |]
 
-getDeleteJobR :: Text -> Handler RepHtml
-getDeleteJobR fname = do
+getDeleteJobR :: JobID -> Handler RepHtml
+getDeleteJobR jobId = do
   sess <- getSessionList jobsSession
-  if fname `notElem` sess
+  if jobId `notElem` sess
      then notFound
-     else do setSessionList jobsSession (Data.List.delete fname sess)
-             liftIO $ deleteJob (T.unpack fname)
+     else do setSessionList jobsSession (Data.List.delete jobId sess)
+             liftIO $ deleteJob jobId
              setMessage $ msgLabel "Job Deleted"
              redirect RootR
 
 msgLabel :: Text -> Html
 msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
 
+requestIP :: Handler Text
+requestIP = fmap (fromString . show . remoteHost . reqWaiRequest) getRequest
+
 handleNewR :: Handler RepHtml
 handleNewR = do
     ((result, widget), enctype) <- runFormPost paramsForm
     case result of
-        FormSuccess params -> do fname <- liftIO $ createJob params
-                                 sess <- addToSessionList jobsSession fname
+        FormSuccess params -> do ip <- requestIP
+                                 job <- liftIO $ createJob (paramsAdd [("ip", ip)] params)
+                                 sess <- addToSessionList jobsSession (jobId job)
                                  setMessage $ msgLabel "Job created."
                                  redirect RootR
         _ ->  defaultLayout [whamlet|
