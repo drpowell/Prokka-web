@@ -1,0 +1,12 @@
+<h1>Prokka Job Queue
+$if null jobs
+  <p>You do not have any jobs in the system
+$else
+  <p>Your Jobs
+  <ul>
+    $forall job <- jobs
+      <li>
+        <a href=@{JobR (jobId job)}>#{jobId job}
+        : #{jobStatusText job}
+<p>
+  <a href=@{NewR}>Create New Job

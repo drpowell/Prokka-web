@@ -4,6 +4,8 @@ module Jobs
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
     , createTmpOut, jobDone, getStatusFile
+
+    , jobIP, jobTime
     ) where
 
 import Imports
@@ -173,3 +175,9 @@ createJob userId ip params fileInfo = do
   BS.hPut hndl (fileContent fileInfo)
   hClose hndl
   return job
+
+jobIP :: Job -> Text
+jobIP job = fromMaybe "" (lookup "ip" . toList . jobMisc $ job)
+
+jobTime :: Job -> Text
+jobTime job = fromMaybe "" (lookup "submittedAt" . toList . jobMisc $ job)

@@ -11,6 +11,7 @@ import Settings
 import Jobs
 import Network.Wai
 
+import AdminUsers (adminUser)
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Yesod.Auth.GoogleEmail
@@ -32,12 +33,14 @@ mkYesod "App" [parseRoutes|
 /new NewR
 /job/#Text JobR GET
 /deleteJob/#Text DeleteJobR GET
+/all-jobs AllJobsR GET
 |]
 
 -- | Authorization for the various routes.  TODO, use this to authorize access to jobs?
 routeAuthorized r _write
     | okRoutes r       = return Authorized
     | loggedInRoutes r = loggedIn
+    | adminRoutes r    = isAdmin
     | otherwise        = return $ Unauthorized "Not allowed"
   where
     okRoutes RootR       = True
@@ -49,10 +52,16 @@ routeAuthorized r _write
     loggedInRoutes (JobR _)       = True
     loggedInRoutes (DeleteJobR _) = True
     loggedInRoutes _              = False
+    adminRoutes AllJobsR = True
+    adminRoutes _        = False
     loggedIn = do user <- maybeAuthId
                   return $ case user of
                              Nothing -> AuthenticationRequired
                              Just _ -> Authorized
+    isAdmin = do mUser <- maybeAuthId
+                 return $ case mUser of
+                    Nothing -> AuthenticationRequired
+                    Just user -> if adminUser user then Authorized else undefined Unauthorized "Admin only"
 
 instance Yesod App where
     approot = ApprootStatic "http://dna.med.monash.edu.au:3000"
@@ -74,6 +83,7 @@ instance Yesod App where
             addStylesheet $ StaticR bootstrap_css
             $(widgetFile "default-layout")
         authId <- maybeAuthId
+        let isAdmin = maybe False adminUser authId
         hamletToRepHtml $(hamletFile "templates/default-layout-wrapper.hamlet")
 
     -- Allow big uploads for new jobs : TODO, more efficient upload handling : http://stackoverflow.com/questions/10880105/efficient-large-file-upload-with-yesod
@@ -142,6 +152,11 @@ getQueueR :: Handler RepHtml
 getQueueR = do
   jobs <- myJobs
   defaultLayout $(widgetFile "queue")
+
+getAllJobsR :: Handler RepHtml
+getAllJobsR = do
+  jobs <- liftIO $ allJobs
+  defaultLayout $(widgetFile "all-queue")
 
 checkAccess Nothing = notFound
 checkAccess (Just job) = do

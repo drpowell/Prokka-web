@@ -1,0 +1,15 @@
+<h1>Prokka Job Queue - All Jobs
+$if null jobs
+  <p>There are no jobs in the system
+$else
+  <p>All Jobs
+  <table class="table table-bordered table-condensed">
+    <tr><th>User<th>IP<th>Submitted Time<th>Job ID<th>Job Status
+    $forall job <- jobs
+      <tr>
+        <td>#{jobUser job}
+        <td>#{jobIP job}
+        <td>#{jobTime job}
+        <td>
+          <a href=@{JobR (jobId job)}>#{jobId job}
+        <td>#{jobStatusText job}

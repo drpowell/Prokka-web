@@ -47,6 +47,8 @@
                   $maybe user <- authId
                     <li><a href=@{QueueR}>Queue</a></li>
                     <li><a href=@{NewR}>New Job</a></li>
+                    $if isAdmin
+                      <li><a href=@{AllJobsR}>All Jobs</a></li>
 
         <div class="container">
             <div id="main" role="main">
