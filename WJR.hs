@@ -82,6 +82,7 @@ instance Yesod App where
         pc <- widgetToPageContent $ do
             addStylesheet $ StaticR bootstrap_css
             $(widgetFile "default-layout")
+
         authId <- maybeAuthId
         let isAdmin = maybe False adminUser authId
         hamletToRepHtml $(hamletFile "templates/default-layout-wrapper.hamlet")
@@ -161,8 +162,11 @@ getAllJobsR = do
 checkAccess Nothing = notFound
 checkAccess (Just job) = do
   maid <- maybeAuthId
-  when (maybe True (jobUser job /=) maid) $
-       notFound
+  case maid of
+    Nothing -> notFound
+    Just user -> if adminUser user || user == jobUser job
+                 then return ()
+                 else notFound
 
 jobStatusText :: Job -> Text
 jobStatusText job = case jobStatus job of
@@ -172,12 +176,14 @@ jobStatusText job = case jobStatus job of
 
 getJobR :: JobID -> Handler RepHtml
 getJobR jobId = do
+  authId <- maybeAuthId
   job <- liftIO $ infoJob jobId
   checkAccess job
   case job of
     Nothing -> notFound
     Just job -> let params = toList $ jobParams job
                     status = jobStatusText job
+                    isAdmin = maybe False adminUser authId
                 in defaultLayout $(widgetFile "job")
 
 getDeleteJobR :: JobID -> Handler RepHtml

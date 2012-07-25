@@ -1,3 +1,4 @@
-= WJR - Web Job Runner
+WJR - Web Job Runner
+===================
 
 Work in progress...

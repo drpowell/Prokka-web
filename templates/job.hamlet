@@ -1,5 +1,8 @@
+$if isAdmin
+  <p>User : #{jobUser job}
 <p>Job : #{jobId}
 <p>Status : #{status}
+<p>Submitted : #{jobTime job}
 <p>Parameters
 $forall (key,val) <- params
   <li><b>#{key}</b>: #{val}
