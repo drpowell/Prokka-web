@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Jobs
     ( Job(..), Params(..), JobID(..), JobStatus(..)
-    , paramsAdd
-    , allJobIds, nextJob
+    , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
     , createTmpOut, jobDone, getStatusFile
     ) where
@@ -10,7 +9,7 @@ module Jobs
 import Imports
 import System.IO
 import Control.Exception
-import Control.Monad (filterM)
+import Control.Monad (filterM,mzero)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -19,42 +18,62 @@ import System.Directory (removeFile,doesDirectoryExist,getDirectoryContents,crea
 import Data.Aeson
 import System.Posix.Types (ProcessID)
 import System.Posix.Files (getFileStatus, modificationTime)
+import System.FilePath.Posix (takeBaseName)
+import Utils (newRandFile)
+
+fileDir :: FilePath
+fileDir = "uploads"
 
 type JobOutput = Text
 type JobID = Text
+type UserID = Text
+type Params = Map Text Text
 
 data JobStatus = JobWaiting
                | JobRunning ProcessID
                | JobComplete JobOutput
                  deriving (Show,Eq)
 
-data Job = Job { jobParams :: [(Text,Text)]
+data Job = Job { jobParams :: Params
+               , jobUser :: UserID
                , jobId :: JobID
+               , jobMisc :: Map Text Text
                , jobStatus :: JobStatus
                }
 
-data Params = Params { paramMap :: Map Text Text
-                     , fileInfo :: FileInfo
-                     }
-               deriving (Show)
+instance FromJSON Job where
+   parseJSON (Object v) = Job <$>
+                            v .: "params" <*>
+                            v .: "user"   <*>
+                            v .: "id"     <*>
+                            v .: "misc"   <*>
+                            (return JobWaiting)
 
+-- A non-Object value is of the wrong type, so use mzero to fail.
+   parseJSON _          = mzero
 
-paramsAdd :: [(Text,Text)] -> Params -> Params
-paramsAdd lst params = params { paramMap = fromList $ toList (paramMap params) ++ lst }
+instance ToJSON Job where
+    toJSON job = Data.Aeson.object
+                      ["params" .= jobParams job
+                      ,"user"   .= jobUser job
+                      ,"id"     .= jobId job
+                      ,"misc"   .= jobMisc job
+                      ]
 
-fileDir :: FilePath
-fileDir = "uploads"
+jobBasename :: JobID -> FilePath
+jobBasename jobId = fileDir ++ "/" ++ T.unpack jobId
 
-jobFname :: JobID -> FilePath
-jobFname jobId = fileDir ++ "/" ++ T.unpack jobId
+fnameToJobId :: FilePath -> JobID
+fnameToJobId fname = fromString (takeBaseName fname)
 
 okFile :: FilePath -> Bool
 okFile fname = fileDir `isPrefixOf` fname && not (".." `isInfixOf` fname)
 
-getTmpOutName jobId = jobFname jobId ++ ".tmpout"
-getOutDirName jobId = jobFname jobId ++ ".output"
-getStatusFile jobId = jobFname jobId ++ ".running"
-getDataFile jobId   = jobFname jobId ++ ".file"
+getInfoName   jobId = jobBasename jobId ++ ".info"
+getTmpOutName jobId = jobBasename jobId ++ ".tmpout"
+getOutDirName jobId = jobBasename jobId ++ ".output"
+getStatusFile jobId = jobBasename jobId ++ ".running"
+getDataFile   jobId = jobBasename jobId ++ ".file"
 
 createTmpOut :: JobID -> IO FilePath
 createTmpOut jobId = do
@@ -66,18 +85,23 @@ jobDone :: JobID -> IO ()
 jobDone jobId = do
   renameDirectory (getTmpOutName jobId) (getOutDirName jobId)
 
+jobsForUser :: UserID -> IO [Job]
+jobsForUser uid = filter ((uid ==) . jobUser) <$> allJobs
 
 allJobIds :: IO [JobID]
 allJobIds = do
   files <- getDirectoryContents fileDir
   let jobFiles = filter (\f -> (not $ "." `isInfixOf` f)) files
-  return $ map fromString jobFiles
+  return $ map fnameToJobId jobFiles
+
+allJobs :: IO [Job]
+allJobs =  catMaybes <$> (allJobIds >>= mapM infoJob)
 
 nextJob :: IO (Maybe JobID)
 nextJob = do
   allJobs <- allJobIds
   waiting <- filterM (\j -> checkJobStatus j >>= return . (==JobWaiting)) allJobs
-  withTimes <- mapM (\j -> do status <- getFileStatus $ jobFname j
+  withTimes <- mapM (\j -> do status <- getFileStatus $ getInfoName j
                               return (modificationTime status, j)
                     ) waiting
   return $ case withTimes of
@@ -86,15 +110,12 @@ nextJob = do
 
 infoJob :: JobID -> IO (Maybe Job)
 infoJob jobId = do
-  let fname = jobFname jobId
+  let fname = getInfoName jobId
   if okFile fname
     then do json <- decode <$> BS.readFile fname
             case json of
               Just x -> do status <- checkJobStatus jobId
-                           return . Just $ Job { jobParams = toList x
-                                               , jobId = jobId
-                                               , jobStatus = status
-                                               }
+                           return . Just $ x { jobStatus = status }
               Nothing -> do putStrLn "Failed to parse json"
                             return Nothing
     else do putStrLn "Bad fname"
@@ -116,26 +137,34 @@ checkJobStatus jobId = do
 
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
-  let fname = jobFname jobId
+  let fname = getInfoName jobId
   if okFile fname
      then do removeFile fname
              removeFile (getDataFile jobId)
      else return ()
 
-createJob :: Params -> IO Job
-createJob params = do
-  let mp = paramsAdd [("fileName", fileName $ fileInfo params)
-                     ,("fileContentType", fileContentType $ fileInfo params)
-                     ] params
-  (fname, hndl) <- openTempFile fileDir "job"
-  let jobId = fromString fname
-  BS.hPut hndl (encode $ paramMap mp)
+createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
+createJob userId ip params fileInfo = do
+  (fname, hndl) <- newRandFile fileDir
   hClose hndl
   putStrLn $ "Writing to : "++fname
-  hndl <- openFile (getDataFile jobId) WriteMode
-  BS.hPut hndl (fileContent $ fileInfo params)
+
+  let jobId = fnameToJobId fname
+  let job = Job { jobParams = params
+                , jobId = jobId
+                , jobUser = userId
+                , jobStatus = JobWaiting
+                , jobMisc = fromList $ [("fileName", fileName fileInfo)
+                                       ,("fileContentType", fileContentType fileInfo)
+                                       ,("ip", ip)
+                                       ]
+                }
+
+  hndl <- openFile (getInfoName jobId) WriteMode
+  BS.hPut hndl (encode job)
   hClose hndl
-  return $ Job { jobParams = toList $ paramMap mp
-               , jobId = jobId
-               , jobStatus = JobWaiting
-               }
+
+  hndl <- openFile (getDataFile jobId) WriteMode
+  BS.hPut hndl (fileContent fileInfo)
+  hClose hndl
+  return job

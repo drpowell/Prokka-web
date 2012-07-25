@@ -11,21 +11,29 @@ import Settings
 import Jobs
 import Network.Wai
 
+import Yesod.Auth
+import Yesod.Auth.BrowserId
+import Yesod.Auth.GoogleEmail
+import Network.HTTP.Conduit (Manager,newManager,def)
 
 bootstrap_css :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]    []
 
-data App = App { getStatic :: Static }
+data App = App { getStatic :: Static
+               , httpManager :: Manager
+               }
 
 mkYesod "App" [parseRoutes|
-/static StaticR Static getStatic
 / RootR GET
+/auth AuthR Auth getAuth
+/static StaticR Static getStatic
 /new NewR
 /job/#Text JobR GET
 /deleteJob/#Text DeleteJobR GET
 |]
 
 instance Yesod App where
+    approot = ApprootStatic "http://dna.med.monash.edu.au:3000"
     defaultLayout widget = do
         master <- getYesod
         mmsg <- getMessage
@@ -41,13 +49,30 @@ instance Yesod App where
             $(widgetFile "default-layout")
         hamletToRepHtml $(hamletFile "templates/default-layout-wrapper.hamlet")
 
+instance YesodAuth App where
+    type AuthId App = Text
+    getAuthId = return . Just . credsIdent
+
+    loginDest _     = RootR
+    logoutDest _    = RootR
+    authPlugins _   = [authBrowserId, authGoogleEmail]
+    authHttpManager = httpManager
+
 instance RenderMessage App FormMessage where
     renderMessage _ _ = defaultFormMessage
 
 
-main = static "static" >>= \s -> warpDebug 3000 (App s)
+main = do
+  st <- static "static"
+  man <- newManager def
+  warpDebug 3000 (App st man)
 
-paramsAForm :: AForm App App Params
+data ParamForm = ParamForm { paramMap :: Map Text Text
+                           , fileInfo :: FileInfo
+                           }
+                 deriving (Show)
+
+paramsAForm :: AForm App App ParamForm
 paramsAForm =
     let a = [freq "Name" textField
             ,fopt "Email" textField
@@ -55,7 +80,7 @@ paramsAForm =
                  ]
         p = fromList . mapMaybe maybeSnd <$> (sequenceA a)
         fileForm = fileAFormReq "FastA file"
-    in Params <$> p <*> fileForm
+    in ParamForm <$> p <*> fileForm
   where
     maybeSnd :: (a, Maybe b) -> Maybe (a,b)
     maybeSnd (x,Just y) = Just (x,y)
@@ -67,67 +92,49 @@ fopt n f = (\x -> (fromString n,x)) <$> aopt f (fromString n) Nothing
 freq :: String -> Field App App a -> AForm App App (Text, Maybe a)
 freq n f = (\x -> (fromString n,Just x)) <$> areq f (fromString n) Nothing
 
-paramsForm :: Html -> MForm App App (FormResult Params, Widget)
+paramsForm :: Html -> MForm App App (FormResult ParamForm, Widget)
 paramsForm = renderTable paramsAForm
 
-jobsSession = "jobs"
-getSessionList tag = do
-  sess <- T.splitOn " " . fromMaybe "" <$> lookupSession tag
-  return $ filter (not . T.null) sess
-setSessionList tag lst = setSession tag (T.intercalate " " lst)
-addToSessionList tag val = do
-  sess' <- (val:) <$> getSessionList tag
-  setSessionList tag sess'
-  return sess'
+myJobs :: Handler [Job]
+myJobs = do
+  maid <- maybeAuthId
+  case maid of
+    Nothing -> return []
+    Just uid -> liftIO $ jobsForUser uid
 
 getRootR :: Handler RepHtml
 getRootR = do
-  sess <- getSessionList jobsSession
-  defaultLayout [whamlet|
-                  <h1>Jobs!
-                  $if null sess
-                  $else
-                    <p>Your Jobs
-                    <ul>
-                      $forall job <- sess
-                        <li>
-                          <a href=@{JobR job}>#{job}
-                  <p>
-                    <a href=@{NewR}>Create New Job
-                 |]
+  jobs <- myJobs
+  maid <- maybeAuthId
+  defaultLayout $(widgetFile "home")
+
+checkAccess Nothing = notFound
+checkAccess (Just job) = do
+  maid <- maybeAuthId
+  when (maybe True (jobUser job /=) maid) $
+       notFound
 
 getJobR :: JobID -> Handler RepHtml
 getJobR jobId = do
-  sess <- getSessionList jobsSession
-  if jobId `notElem` sess
-     then notFound
-     else do job <- liftIO $ infoJob jobId
-             case job of
-               Nothing -> defaultLayout [whamlet|<p>Job not found|]
-               Just job -> let params = jobParams job
-                               status :: Text
-                               status = case jobStatus job of
-                                          JobWaiting -> "Waiting"
-                                          JobRunning _ -> "Running..."
-                                          JobComplete _ -> "Finished"
-                           in defaultLayout [whamlet|<p>Job : #{jobId}
-                                                     <p>Status : #{status}
-                                                     <p>Parameters
-                                                     $forall (key,val) <- params
-                                                       <li><b>#{key}</b>: #{val}
-                                                     <p>
-                                                     <a href=@{DeleteJobR jobId}>Delete Job
-                                             |]
+  job <- liftIO $ infoJob jobId
+  checkAccess job
+  case job of
+    Nothing -> notFound
+    Just job -> let params = toList $ jobParams job
+                    status :: Text
+                    status = case jobStatus job of
+                               JobWaiting -> "Waiting"
+                               JobRunning _ -> "Running..."
+                               JobComplete _ -> "Finished"
+                in defaultLayout $(widgetFile "job")
 
 getDeleteJobR :: JobID -> Handler RepHtml
 getDeleteJobR jobId = do
-  sess <- getSessionList jobsSession
-  if jobId `notElem` sess
-     then notFound
-     else do setSessionList jobsSession (Data.List.delete jobId sess)
-             liftIO $ deleteJob jobId
-             setMessage $ msgLabel "Job Deleted"
-             redirect RootR
+  job <- liftIO $ infoJob jobId
+  checkAccess job
+  liftIO $ deleteJob jobId
+  setMessage $ msgLabel "Job Deleted"
+  redirect RootR
 
 msgLabel :: Text -> Html
 msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
@@ -137,19 +144,12 @@ requestIP = fmap (fromString . show . remoteHost . reqWaiRequest) getRequest
 
 handleNewR :: Handler RepHtml
 handleNewR = do
+    Just aid <- maybeAuthId
     ((result, widget), enctype) <- runFormPost paramsForm
     case result of
         FormSuccess params -> do ip <- requestIP
-                                 job <- liftIO $ createJob (paramsAdd [("ip", ip)] params)
-                                 sess <- addToSessionList jobsSession (jobId job)
+                                 job <- liftIO $ createJob aid ip (paramMap params) (fileInfo params)
                                  setMessage $ msgLabel "Job created."
                                  redirect RootR
-        _ ->  defaultLayout [whamlet|
-<h1>Create New Job
-<form method=post action=@{NewR} enctype=#{enctype}>
-    <table>
-        ^{widget}
-    <input type=submit>
-|]
-
+        _ ->  defaultLayout $(widgetFile "new-job")
 

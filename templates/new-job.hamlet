@@ -1,0 +1,5 @@
+<h1>Create New Job
+<form method=post action=@{NewR} enctype=#{enctype}>
+    <table>
+        ^{widget}
+    <input type=submit>

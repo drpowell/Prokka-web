@@ -1,0 +1,8 @@
+<p>Job : #{jobId}
+<p>Status : #{status}
+<p>Parameters
+$forall (key,val) <- params
+  <li><b>#{key}</b>: #{val}
+<p>
+<a href=@{DeleteJobR jobId}>Delete Job
+

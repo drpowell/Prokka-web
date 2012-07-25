@@ -1,0 +1,18 @@
+<h1>Jobs!
+$if null jobs
+$else
+  <p>Your Jobs
+  <ul>
+    $forall job <- jobs
+      <li>
+        <a href=@{JobR (jobId job)}>#{jobId job}
+<p>
+  <a href=@{NewR}>Create New Job
+<p>Your current auth ID: #{show maid}
+$maybe _ <- maid
+ <p>
+   <a href=@{AuthR LogoutR}>Logout
+$nothing
+ <p>
+   <a href=@{AuthR LoginR}>Go to the login page
+
