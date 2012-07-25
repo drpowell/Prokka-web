@@ -27,13 +27,39 @@ mkYesod "App" [parseRoutes|
 / RootR GET
 /auth AuthR Auth getAuth
 /static StaticR Static getStatic
+
+/queue QueueR GET
 /new NewR
 /job/#Text JobR GET
 /deleteJob/#Text DeleteJobR GET
 |]
 
+-- | Authorization for the various routes.  TODO, use this to authorize access to jobs?
+routeAuthorized r _write
+    | okRoutes r       = return Authorized
+    | loggedInRoutes r = loggedIn
+    | otherwise        = return $ Unauthorized "Not allowed"
+  where
+    okRoutes RootR       = True
+    okRoutes (AuthR _)   = True
+    okRoutes (StaticR _) = True
+    okRoutes _           = False
+    loggedInRoutes QueueR         = True
+    loggedInRoutes NewR           = True
+    loggedInRoutes (JobR _)       = True
+    loggedInRoutes (DeleteJobR _) = True
+    loggedInRoutes _              = False
+    loggedIn = do user <- maybeAuthId
+                  return $ case user of
+                             Nothing -> AuthenticationRequired
+                             Just _ -> Authorized
+
 instance Yesod App where
     approot = ApprootStatic "http://dna.med.monash.edu.au:3000"
+    authRoute _ = Just $ AuthR LoginR
+
+    isAuthorized = routeAuthorized
+
     defaultLayout widget = do
         master <- getYesod
         mmsg <- getMessage
@@ -47,13 +73,19 @@ instance Yesod App where
         pc <- widgetToPageContent $ do
             addStylesheet $ StaticR bootstrap_css
             $(widgetFile "default-layout")
+        authId <- maybeAuthId
         hamletToRepHtml $(hamletFile "templates/default-layout-wrapper.hamlet")
+
+    -- Allow big uploads for new jobs : TODO, more efficient upload handling : http://stackoverflow.com/questions/10880105/efficient-large-file-upload-with-yesod
+    maximumContentLength _ (Just NewR) = 2 * 1024 * 1024 * 1024 -- 2 gigabytes
+    maximumContentLength _ _ = 2 * 1024 * 1024 -- 2 megabytes
+
 
 instance YesodAuth App where
     type AuthId App = Text
     getAuthId = return . Just . credsIdent
 
-    loginDest _     = RootR
+    loginDest _     = QueueR
     logoutDest _    = RootR
     authPlugins _   = [authBrowserId, authGoogleEmail]
     authHttpManager = httpManager
@@ -67,20 +99,21 @@ main = do
   man <- newManager def
   warpDebug 3000 (App st man)
 
-data ParamForm = ParamForm { paramMap :: Map Text Text
-                           , fileInfo :: FileInfo
+data ParamForm = ParamForm { fileInfo :: FileInfo
+                           , paramMap :: Map Text Text
                            }
                  deriving (Show)
 
+pairs = map (\x -> (x,x))
+
+-- Params for the jobs.  TODO - separate this out (how?)
 paramsAForm :: AForm App App ParamForm
 paramsAForm =
-    let a = [freq "Name" textField
-            ,fopt "Email" textField
-            ,fopt "pulldown" (selectFieldList ([("One","One"),("Two","Two"),("Cee","Cee")] :: [(Text,Text)]))
-                 ]
+    let fileForm = fileAFormReq "Contigs file (FastA): "
+        a = [freq "Kingdom" (selectFieldList (pairs ["Bacteria","Archaea","Viruses"]))
+            ]
         p = fromList . mapMaybe maybeSnd <$> (sequenceA a)
-        fileForm = fileAFormReq "FastA file"
-    in ParamForm <$> p <*> fileForm
+    in ParamForm <$> fileForm <*> p
   where
     maybeSnd :: (a, Maybe b) -> Maybe (a,b)
     maybeSnd (x,Just y) = Just (x,y)
@@ -103,16 +136,24 @@ myJobs = do
     Just uid -> liftIO $ jobsForUser uid
 
 getRootR :: Handler RepHtml
-getRootR = do
+getRootR = defaultLayout $(widgetFile "home")
+
+getQueueR :: Handler RepHtml
+getQueueR = do
   jobs <- myJobs
-  maid <- maybeAuthId
-  defaultLayout $(widgetFile "home")
+  defaultLayout $(widgetFile "queue")
 
 checkAccess Nothing = notFound
 checkAccess (Just job) = do
   maid <- maybeAuthId
   when (maybe True (jobUser job /=) maid) $
        notFound
+
+jobStatusText :: Job -> Text
+jobStatusText job = case jobStatus job of
+                      JobWaiting -> "Waiting"
+                      JobRunning _ -> "Running..."
+                      JobComplete _ -> "Finished"
 
 getJobR :: JobID -> Handler RepHtml
 getJobR jobId = do
@@ -121,11 +162,7 @@ getJobR jobId = do
   case job of
     Nothing -> notFound
     Just job -> let params = toList $ jobParams job
-                    status :: Text
-                    status = case jobStatus job of
-                               JobWaiting -> "Waiting"
-                               JobRunning _ -> "Running..."
-                               JobComplete _ -> "Finished"
+                    status = jobStatusText job
                 in defaultLayout $(widgetFile "job")
 
 getDeleteJobR :: JobID -> Handler RepHtml
@@ -134,7 +171,7 @@ getDeleteJobR jobId = do
   checkAccess job
   liftIO $ deleteJob jobId
   setMessage $ msgLabel "Job Deleted"
-  redirect RootR
+  redirect QueueR
 
 msgLabel :: Text -> Html
 msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
@@ -150,6 +187,6 @@ handleNewR = do
         FormSuccess params -> do ip <- requestIP
                                  job <- liftIO $ createJob aid ip (paramMap params) (fileInfo params)
                                  setMessage $ msgLabel "Job created."
-                                 redirect RootR
+                                 redirect QueueR
         _ ->  defaultLayout $(widgetFile "new-job")
 

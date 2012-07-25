@@ -34,11 +34,19 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
-              <a class="brand" href=@{RootR}>Jobs</a>
+              <a class="brand" href=@{RootR}>Prokka</a>
+              <div class="pull-right">
+                $maybe user <- authId
+                   <span class="label">#{user}
+                   <a class="btn" href=@{AuthR LogoutR}>Logout
+                $nothing
+                  <a class="btn" href=@{AuthR LoginR}>Login
               <div class="nav-collapse">
                 <ul class="nav">
-                  <li class="active"><a href=@{RootR}>Home</a></li>
-                  <li><a href=@{NewR}>New Job</a></li>
+                  <li><a href='http://bioinformatics.net.au/prokka-manual.html'>Manual</a></li>
+                  $maybe user <- authId
+                    <li><a href=@{QueueR}>Queue</a></li>
+                    <li><a href=@{NewR}>New Job</a></li>
 
         <div class="container">
             <div id="main" role="main">

@@ -19,6 +19,7 @@ import Data.Aeson
 import System.Posix.Types (ProcessID)
 import System.Posix.Files (getFileStatus, modificationTime)
 import System.FilePath.Posix (takeBaseName)
+import System.Time (getClockTime)
 import Utils (newRandFile)
 
 fileDir :: FilePath
@@ -140,7 +141,9 @@ deleteJob jobId = do
   let fname = getInfoName jobId
   if okFile fname
      then do removeFile fname
+             removeFile (jobBasename jobId)
              removeFile (getDataFile jobId)
+             -- TODO : remove status file and output (or tmpoutput) if they exist
      else return ()
 
 createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
@@ -149,6 +152,7 @@ createJob userId ip params fileInfo = do
   hClose hndl
   putStrLn $ "Writing to : "++fname
 
+  now <- getClockTime
   let jobId = fnameToJobId fname
   let job = Job { jobParams = params
                 , jobId = jobId
@@ -157,6 +161,7 @@ createJob userId ip params fileInfo = do
                 , jobMisc = fromList $ [("fileName", fileName fileInfo)
                                        ,("fileContentType", fileContentType fileInfo)
                                        ,("ip", ip)
+                                       ,("submittedAt",fromString $ show now)
                                        ]
                 }
 

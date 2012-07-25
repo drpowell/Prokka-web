@@ -1,4 +1,4 @@
-<h1>Create New Job
+<h1>New Prokka Job
 <form method=post action=@{NewR} enctype=#{enctype}>
     <table>
         ^{widget}
