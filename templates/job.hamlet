@@ -7,5 +7,11 @@ $if isAdmin
 $forall (key,val) <- params
   <li><b>#{key}</b>: #{val}
 <p>
-<a href=@{DeleteJobR jobId}>Delete Job
+$if finished
+  <div>
+    <a href=@{jobOutputLink jobId}>Browse Output
+  <div>
+    <a href=@{jobOutputZippedLink jobId}>Download zipped output
+<div>
+  <a href=@{JobDeleteR jobId}>Delete Job
 

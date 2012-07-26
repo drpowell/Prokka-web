@@ -32,7 +32,8 @@ mkYesod "App" [parseRoutes|
 /queue QueueR GET
 /new NewR
 /job/#Text JobR GET
-/deleteJob/#Text DeleteJobR GET
+/job-delete/#Text JobDeleteR GET
+/job-output/*OutputFile JobOutputR GET
 /all-jobs AllJobsR GET
 |]
 
@@ -50,7 +51,8 @@ routeAuthorized r _write
     loggedInRoutes QueueR         = True
     loggedInRoutes NewR           = True
     loggedInRoutes (JobR _)       = True
-    loggedInRoutes (DeleteJobR _) = True
+    loggedInRoutes (JobDeleteR _) = True
+    loggedInRoutes (JobOutputR _) = True
     loggedInRoutes _              = False
     adminRoutes AllJobsR = True
     adminRoutes _        = False
@@ -197,10 +199,11 @@ getJobR jobId = do
     Just job -> let params = toList $ jobParams job
                     status = jobStatusText job
                     isAdmin = maybe False adminUser authId
+                    finished = case jobStatus job of { JobComplete _ -> True; _ -> False}
                 in defaultLayout $(widgetFile "job")
 
-getDeleteJobR :: JobID -> Handler RepHtml
-getDeleteJobR jobId = do
+getJobDeleteR :: JobID -> Handler RepHtml
+getJobDeleteR jobId = do
   job <- liftIO $ infoJob jobId
   checkAccess job
   liftIO $ deleteJob jobId
@@ -223,4 +226,50 @@ handleNewR = do
                                  setMessage $ msgLabel "Job created."
                                  redirect QueueR
         _ ->  defaultLayout $(widgetFile "new-job")
+
+
+data OutputFile = OutputFile JobID [Text]
+                | OutputZipped JobID
+                  deriving (Show,Eq,Read)
+instance PathMultiPiece OutputFile where
+    toPathMultiPiece (OutputFile j lst) = j : lst
+    toPathMultiPiece (OutputZipped j) = [j `T.append` ".zip"]
+
+    fromPathMultiPiece [j] =  case T.stripSuffix ".zip" j of
+                                   Nothing -> Just $ OutputFile j []
+                                   Just jId -> Just $ OutputZipped jId
+    fromPathMultiPiece (j:lst) =  Just $ OutputFile j lst
+    fromPathMultiPiece _ = Nothing
+
+fileName (OutputFile _ lst) = last lst
+
+jobOutputLink, jobOutputZippedLink :: JobID -> Route App
+jobOutputLink jobId = JobOutputR $ OutputFile jobId []
+jobOutputZippedLink jobId = JobOutputR $ OutputZipped jobId
+
+getJobOutputR :: OutputFile -> Handler RepHtml
+getJobOutputR (OutputZipped jobId) = do
+  mJob <- liftIO $ infoJob jobId
+  checkAccess mJob
+  file <- liftIO $ zippedOutput jobId
+  sendFile typeOctet file
+getJobOutputR (OutputFile jobId path) = do
+    checkValidPath path
+    authId <- maybeAuthId
+    mJob <- liftIO $ infoJob jobId
+    checkAccess mJob
+    case mJob of
+      Nothing -> notFound
+      Just job -> sendFileOrListing
+  where
+    checkValidPath path = case filter (\f -> "." `T.isPrefixOf` f) path of
+                            [] -> return ()
+                            _ -> error "Invalid"
+    sendFileOrListing = do
+        file <- liftIO $ getActualFile jobId path
+        case file of
+          InvalidPath -> notFound
+          File filename -> sendFile typePlain filename
+          Directory filePaths -> let files = map (\f -> OutputFile jobId (path ++ [fromString f])) filePaths
+                                 in defaultLayout $(widgetFile "output-list")
 

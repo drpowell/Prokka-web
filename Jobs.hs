@@ -4,6 +4,7 @@ module Jobs
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
     , createTmpOut, jobDone, getStatusFile
+    , getActualFile, ActualFile(..), zippedOutput
 
     , jobIP, jobTime
     ) where
@@ -16,13 +17,16 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.List
-import System.Directory (removeFile,doesDirectoryExist,getDirectoryContents,createDirectory,renameDirectory)
+import System.Directory (removeFile,removeDirectoryRecursive,doesDirectoryExist,getDirectoryContents
+                        ,createDirectory,renameDirectory,doesFileExist)
 import Data.Aeson
 import System.Posix.Types (ProcessID)
 import System.Posix.Files (getFileStatus, modificationTime)
 import System.FilePath.Posix (takeBaseName)
 import System.Time (getClockTime)
+import System.Process (rawSystem)
 import Utils (newRandFile)
+
 
 fileDir :: FilePath
 fileDir = "uploads"
@@ -72,11 +76,17 @@ fnameToJobId fname = fromString (takeBaseName fname)
 okFile :: FilePath -> Bool
 okFile fname = fileDir `isPrefixOf` fname && not (".." `isInfixOf` fname)
 
+enforceOkJob :: JobID -> IO ()
+enforceOkJob jobId = if okFile (getInfoName jobId)
+                       then return ()
+                       else error $ "Bad job id : "++(T.unpack jobId)
+
 getInfoName   jobId = jobBasename jobId ++ ".info"
 getTmpOutName jobId = jobBasename jobId ++ ".tmpout"
 getOutDirName jobId = jobBasename jobId ++ ".output"
 getStatusFile jobId = jobBasename jobId ++ ".running"
 getDataFile   jobId = jobBasename jobId ++ ".file"
+getZipOutName jobId = jobBasename jobId ++ ".zip"
 
 createTmpOut :: JobID -> IO FilePath
 createTmpOut jobId = do
@@ -113,6 +123,7 @@ nextJob = do
 
 infoJob :: JobID -> IO (Maybe Job)
 infoJob jobId = do
+  enforceOkJob jobId
   let fname = getInfoName jobId
   if okFile fname
     then do json <- decode <$> BS.readFile fname
@@ -131,6 +142,7 @@ tryReadFile fname = do
 
 checkJobStatus :: JobID -> IO JobStatus
 checkJobStatus jobId = do
+  enforceOkJob jobId
   haveOutDir <- doesDirectoryExist (getOutDirName jobId)
   if haveOutDir then return $ JobComplete "done"
     else do running <- tryReadFile (getStatusFile jobId)
@@ -140,13 +152,9 @@ checkJobStatus jobId = do
 
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
-  let fname = getInfoName jobId
-  if okFile fname
-     then do removeFile fname
-             removeFile (jobBasename jobId)
-             removeFile (getDataFile jobId)
-             -- TODO : remove status file and output (or tmpoutput) if they exist
-     else return ()
+  enforceOkJob jobId
+  mapM_ (\f -> removeFile $ f jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName]
+  mapM_ (\f -> removeDirectoryRecursive $ f jobId) [getOutDirName, getTmpOutName]
 
 createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
 createJob userId ip params fileInfo = do
@@ -175,6 +183,44 @@ createJob userId ip params fileInfo = do
   BS.hPut hndl (fileContent fileInfo)
   hClose hndl
   return job
+
+data ActualFile = InvalidPath | Directory [FilePath] | File FilePath
+
+getActualFile :: JobID -> [Text] -> IO ActualFile
+getActualFile jobId subPathT
+    | not (okFile $ getInfoName jobId) = return InvalidPath
+    | not (checkValidPath subPath)     = return InvalidPath
+    | otherwise = do
+        haveOutDir <- doesDirectoryExist (getOutDirName jobId)
+        if not haveOutDir
+            then return InvalidPath
+            else do isFile <- doesFileExist actualDir
+                    if isFile
+                       then return $ File actualDir
+                       else do files <- getDirectoryContents actualDir
+                               return . Directory $ filter (\f -> not $ "." `isPrefixOf` f) files
+  where
+    subPath = map T.unpack subPathT
+    actualDir = getOutDirName jobId ++ case subPath of
+                                         [] -> ""
+                                         x -> "/" ++ intercalate "/" subPath
+    checkValidPath path = null $ filter (\f -> "." `isPrefixOf` f) path
+
+zippedOutput :: JobID -> IO FilePath
+zippedOutput jobId = do
+    enforceOkJob jobId
+    let zipFile = getZipOutName jobId
+    exists <- doesFileExist zipFile
+    if exists
+       then return zipFile
+       else do mkZipFile jobId
+               return zipFile
+  where
+    stripFileDir p = fromJust $ stripPrefix (fileDir++"/") p
+    mkZipFile jobId = rawSystem "./zip-output.sh" [fileDir  -- cd to here
+                                                  , stripFileDir $ getOutDirName jobId  -- What to zip
+                                                  , stripFileDir $ getZipOutName jobId  -- Where to put it
+                                                  ]
 
 jobIP :: Job -> Text
 jobIP job = fromMaybe "" (lookup "ip" . toList . jobMisc $ job)
