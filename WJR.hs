@@ -101,6 +101,19 @@ instance YesodAuth App where
     authPlugins _   = [authBrowserId, authGoogleEmail]
     authHttpManager = httpManager
 
+    loginHandler = defaultLayout $ do
+      tm <- lift getRouteToMaster
+      let browserId   = apLogin authBrowserId tm
+          googleEmail = apLogin authGoogleEmail tm
+      $(widgetFile "login")
+
+    -- | What to show on the login page.
+    -- loginHandler :: GHandler Auth m RepHtml
+    -- loginHandler = defaultLayout $ do
+    --     tm <- lift getRouteToMaster
+    --     master <- lift getYesod
+    --     mapM_ (flip apLogin tm) (authPlugins master)
+
 instance RenderMessage App FormMessage where
     renderMessage _ _ = defaultFormMessage
 

@@ -1,2 +1,12 @@
 #message { color: green }
 h1 { padding-bottom: 10px; }
+
+.login {
+  margin-bottom: 20px;
+  font-size: 18px;
+  strong { margin: 10px 0 10px 0 }
+  #browserid {
+    p { display: inline }
+    img { margin-top: -10px }
+  }
+}

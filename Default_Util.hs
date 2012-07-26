@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
+
+{- Copied from Yesod Default_Util, solely for the purpose of supporting coffeescript. Remove once yesod does this -}
+
 -- | Various utilities used in the scaffolded site.
 module Default_Util
     ( globFile
