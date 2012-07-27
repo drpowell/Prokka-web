@@ -1,24 +1,28 @@
 #!/usr/bin/env runghc
 {-# LANGUAGE TypeFamilies, QuasiQuotes, MultiParamTypeClasses,
              TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, TupleSections #-}
 import Imports
 import Yesod.Static (Static, Route(..), static)
 import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
-import Data.Traversable (sequenceA)
 import Data.List (delete)
-import Settings
-import Jobs
 import Network.Wai
 
-import AdminUsers (adminUser)
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Yesod.Auth.GoogleEmail
 import Network.HTTP.Conduit (Manager,newManager,def)
 
-bootstrap_css :: Route Static
+import AdminUsers (adminUser)
+import Settings
+import Jobs
+import GeneticCodes
+
+bootstrap_css, bootstrap_js, jquery_js :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]    []
+bootstrap_js = StaticRoute ["bootstrap-tooltip.js"]    []
+jquery_js = StaticRoute ["jquery-1.7.2.min.js"]    []
 
 data App = App { getStatic :: Static
                , httpManager :: Manager
@@ -83,6 +87,8 @@ instance Yesod App where
 
         pc <- widgetToPageContent $ do
             addStylesheet $ StaticR bootstrap_css
+            addScript $ StaticR jquery_js
+            addScript $ StaticR bootstrap_js
             $(widgetFile "default-layout")
 
         authId <- maybeAuthId
@@ -125,34 +131,77 @@ main = do
   man <- newManager def
   warpDebug 3000 (App st man)
 
+
+----------------------------------------------------------------------
+
+data ParamField s m = ParamField { name :: Text
+                             , label :: String
+                             , tip :: String
+                             , field :: Field s m Text
+                             , defVal :: Maybe Text
+                             }
+
 data ParamForm = ParamForm { fileInfo :: FileInfo
                            , paramMap :: Map Text Text
                            }
                  deriving (Show)
 
-pairs = map (\x -> (x,x))
+fieldBoolToText :: RenderMessage m FormMessage => Field s m Bool -> Field s m Text
+fieldBoolToText (Field parser viewer) = Field parser' viewer'
+    where
+      showB True = "yes"
+      showB False = "no"
+      readB "yes" = True
+      readB _ = False
+      parser' x = do r <- parser x
+                     return $ case r of
+                       Right (Just b) -> Right . Just . showB $ b
+                       Right Nothing -> Right Nothing
+                       Left m -> Left m
+      viewer' id name attrs valOrErr req =
+          let toB = case valOrErr of {Left x -> Left x; Right b -> Right (readB b)}
+          in viewer id name attrs toB req
 
 -- Params for the jobs.  TODO - separate this out (how?)
-paramsAForm :: AForm App App ParamForm
-paramsAForm =
-    let fileForm = fileAFormReq "Contigs file (FastA): "
-        a = [freq "Kingdom" (selectFieldList (pairs ["Bacteria","Archaea","Viruses"]))
+paramsForm :: Html -> MForm App App (FormResult ParamForm, Widget)
+paramsForm fragment = do
+    let gcodes :: [(Text,Text)]
+        gcodes = map (\(a,b) -> (fromString $ b ++ " : " ++ a, fromString b)) geneticCodes
+        gcodeField = selectFieldList gcodes
+        gramField = selectFieldList (pairs ["Ignore","+ve","-ve"])
+    (fileR, fileV) <-aFormToForm $ fileAFormReq "Contigs file (FastA): "
+
+    let a = [(fs "name" "Project Name" "An identifying name for your use" textField Nothing)
+            ,(fs "locus" "Locus tag prefix" "Locus tag prefix" textField (Just "PROKKA"))
+            ,(fs "genus" "Genus" "Genus" textField Nothing)
+            ,(fs "species" "Species" "Species" textField Nothing)
+            ,(fs "gcode" "Genetic Code" "Genetic Code / Translation table" gcodeField (Just "11"))
+            ,(fs "gram" "Gram" "Gram +ve or Gram -ve" gramField Nothing)
+            ,(fs "genes" "Add genes" "Add genes" (fieldBoolToText checkBoxField) Nothing)
+            ,(fs "genus" "Use genus" "Use genus" (fieldBoolToText checkBoxField) Nothing)
             ]
-        p = fromList . mapMaybe maybeSnd <$> (sequenceA a)
-    in ParamForm <$> fileForm <*> p
+
+    -- results :: [(Text, FormResult Text)]
+    -- views :: [FieldView]
+    (results, paramViews) <- unzip <$> sequenceA a
+    let views = fileV paramViews
+    let widget = $(widgetFile "param-form")
+
+    let resMap = fromList . mapMaybe maybeSnd <$> sequenceA (map pairA results)
+    let retParamForm = ParamForm <$> fileR <*> resMap
+    return (retParamForm, widget)
   where
+    pairs = map (\x -> (x,x))
+    pairA (a,b) = (\x -> (a,x)) <$> b
     maybeSnd :: (a, Maybe b) -> Maybe (a,b)
     maybeSnd (x,Just y) = Just (x,y)
     maybeSnd _ = Nothing
 
-fopt :: String -> Field App App a -> AForm App App (Text, Maybe a)
-fopt n f = (\x -> (fromString n,x)) <$> aopt f (fromString n) Nothing
-
-freq :: String -> Field App App a -> AForm App App (Text, Maybe a)
-freq n f = (\x -> (fromString n,Just x)) <$> areq f (fromString n) Nothing
-
-paramsForm :: Html -> MForm App App (FormResult ParamForm, Widget)
-paramsForm = renderTable paramsAForm
+    -- fs :: -> MForm s m ((Text,FormResult Text), FieldView s m)
+    fs name label tip fld def = let s = FieldSettings label (Just tip) Nothing (Just name) []
+                                in do (r,v) <- mopt fld s (Just def)
+                                      return ((name,r), v)
+----------------------------------------------------------------------
 
 myJobs :: Handler [Job]
 myJobs = do

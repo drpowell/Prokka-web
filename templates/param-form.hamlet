@@ -1,0 +1,8 @@
+#{fragment}
+$forall view <- views
+    <tr :fvRequired view:.required :not $ fvRequired view:.optional>
+        <td>
+            <label for=#{fvId view}>#{fvLabel view}
+        <td .param title=#{fromMaybe "" $ fvTooltip view}>^{fvInput view}
+        $maybe err <- fvErrors view
+            <td .errors>#{err}
