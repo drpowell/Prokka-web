@@ -6,7 +6,6 @@ import Imports
 import Yesod.Static (Static, Route(..), static)
 import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
-import Data.List (delete)
 import Network.Wai
 
 import Yesod.Auth
@@ -17,7 +16,7 @@ import Network.HTTP.Conduit (Manager,newManager,def)
 import AdminUsers (adminUser)
 import Settings
 import Jobs
-import GeneticCodes
+import ParamDefs
 
 bootstrap_css, bootstrap_js, jquery_js :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]    []
@@ -134,18 +133,8 @@ main = do
 
 ----------------------------------------------------------------------
 
-data ParamField s m = ParamField { name :: Text
-                             , label :: String
-                             , tip :: String
-                             , field :: Field s m Text
-                             , defVal :: Maybe Text
-                             }
 
-data ParamForm = ParamForm { fileInfo :: FileInfo
-                           , paramMap :: Map Text Text
-                           }
-                 deriving (Show)
-
+-- | Convert a "Field" that uses a Bool, to use a Text yes/no instead
 fieldBoolToText :: RenderMessage m FormMessage => Field s m Bool -> Field s m Text
 fieldBoolToText (Field parser viewer) = Field parser' viewer'
     where
@@ -162,28 +151,23 @@ fieldBoolToText (Field parser viewer) = Field parser' viewer'
           let toB = case valOrErr of {Left x -> Left x; Right b -> Right (readB b)}
           in viewer id name attrs toB req
 
+
+data ParamForm = ParamForm { fileInfo :: FileInfo
+                           , paramMap :: Map Text Text
+                           }
+                 deriving (Show)
+
 -- Params for the jobs.  TODO - separate this out (how?)
 paramsForm :: Html -> MForm App App (FormResult ParamForm, Widget)
 paramsForm fragment = do
-    let gcodes :: [(Text,Text)]
-        gcodes = map (\(a,b) -> (fromString $ b ++ " : " ++ a, fromString b)) geneticCodes
-        gcodeField = selectFieldList gcodes
-        gramField = selectFieldList (pairs ["Ignore","+ve","-ve"])
-    (fileR, fileV) <-aFormToForm $ fileAFormReq "Contigs file (FastA): "
-
-    let a = [(fs "name" "Project Name" "An identifying name for your use" textField Nothing)
-            ,(fs "locus" "Locus tag prefix" "Locus tag prefix" textField (Just "PROKKA"))
-            ,(fs "genus" "Genus" "Genus" textField Nothing)
-            ,(fs "species" "Species" "Species" textField Nothing)
-            ,(fs "gcode" "Genetic Code" "Genetic Code / Translation table" gcodeField (Just "11"))
-            ,(fs "gram" "Gram" "Gram +ve or Gram -ve" gramField Nothing)
-            ,(fs "genes" "Add genes" "Add genes" (fieldBoolToText checkBoxField) Nothing)
-            ,(fs "genus" "Use genus" "Use genus" (fieldBoolToText checkBoxField) Nothing)
-            ]
+    (fileR, fileV) <- aFormToForm $ fileAFormReq $
+                         FieldSettings "Contigs file (FastA): "
+                                       (Just "FastA file containing your contigs to annotate")
+                                       Nothing (Just "contigs") []
 
     -- results :: [(Text, FormResult Text)]
     -- views :: [FieldView]
-    (results, paramViews) <- unzip <$> sequenceA a
+    (results, paramViews) <- unzip <$> sequenceA (map fs paramDefs)
     let views = fileV paramViews
     let widget = $(widgetFile "param-form")
 
@@ -191,16 +175,20 @@ paramsForm fragment = do
     let retParamForm = ParamForm <$> fileR <*> resMap
     return (retParamForm, widget)
   where
-    pairs = map (\x -> (x,x))
     pairA (a,b) = (\x -> (a,x)) <$> b
     maybeSnd :: (a, Maybe b) -> Maybe (a,b)
     maybeSnd (x,Just y) = Just (x,y)
     maybeSnd _ = Nothing
 
-    -- fs :: -> MForm s m ((Text,FormResult Text), FieldView s m)
-    fs name label tip fld def = let s = FieldSettings label (Just tip) Nothing (Just name) []
-                                in do (r,v) <- mopt fld s (Just def)
-                                      return ((name,r), v)
+    -- fs :: ParamField -> MForm s m ((Text,FormResult Text), FieldView s m)
+    fs (ParamField name label tip fld def _) =
+        let s = FieldSettings (fromString label) (Just $ fromString tip) Nothing (Just name) []
+        in do (r,v) <- mopt (paramFieldToField fld) s (Just def)
+              return ((name,r), v)
+
+    paramFieldToField TextField         = textField
+    paramFieldToField CheckBoxField     = fieldBoolToText checkBoxField
+    paramFieldToField (ListField pairs) = selectFieldList pairs
 ----------------------------------------------------------------------
 
 myJobs :: Handler [Job]
@@ -271,7 +259,7 @@ handleNewR = do
     ((result, widget), enctype) <- runFormPost paramsForm
     case result of
         FormSuccess params -> do ip <- requestIP
-                                 job <- liftIO $ createJob aid ip (paramMap params) (fileInfo params)
+                                 liftIO $ createJob aid ip (paramMap params) (fileInfo params)
                                  setMessage $ msgLabel "Job created."
                                  redirect QueueR
         _ ->  defaultLayout $(widgetFile "new-job")
@@ -291,6 +279,7 @@ instance PathMultiPiece OutputFile where
     fromPathMultiPiece _ = Nothing
 
 fileName (OutputFile _ lst) = last lst
+fileName (OutputZipped _) = ""
 
 jobOutputLink, jobOutputZippedLink :: JobID -> Route App
 jobOutputLink jobId = JobOutputR $ OutputFile jobId []
@@ -304,12 +293,11 @@ getJobOutputR (OutputZipped jobId) = do
   sendFile typeOctet file
 getJobOutputR (OutputFile jobId path) = do
     checkValidPath path
-    authId <- maybeAuthId
     mJob <- liftIO $ infoJob jobId
     checkAccess mJob
     case mJob of
       Nothing -> notFound
-      Just job -> sendFileOrListing
+      Just _ -> sendFileOrListing
   where
     checkValidPath path = case filter (\f -> "." `T.isPrefixOf` f) path of
                             [] -> return ()
