@@ -3,7 +3,7 @@ module Jobs
     ( Job(..), Params(..), JobID(..), JobStatus(..)
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
-    , createTmpOut, jobDone, getStatusFile
+    , createTmpOut, jobDone, getStatusFile, getDataFile
     , getActualFile, ActualFile(..), zippedOutput
 
     , jobIP, jobTime
@@ -203,7 +203,7 @@ getActualFile jobId subPathT
     subPath = map T.unpack subPathT
     actualDir = getOutDirName jobId ++ case subPath of
                                          [] -> ""
-                                         x -> "/" ++ intercalate "/" subPath
+                                         _ -> "/" ++ intercalate "/" subPath
     checkValidPath path = null $ filter (\f -> "." `isPrefixOf` f) path
 
 zippedOutput :: JobID -> IO FilePath
