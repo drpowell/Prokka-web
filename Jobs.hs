@@ -11,6 +11,7 @@ module Jobs
 
 import Imports
 import System.IO
+import System.IO.Error (isDoesNotExistError)
 import Control.Exception
 import Control.Monad (filterM,mzero)
 import qualified Data.ByteString.Lazy as BS
@@ -152,9 +153,13 @@ checkJobStatus jobId = do
 
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
-  enforceOkJob jobId
-  mapM_ (\f -> removeFile $ f jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName]
-  mapM_ (\f -> removeDirectoryRecursive $ f jobId) [getOutDirName, getTmpOutName]
+    enforceOkJob jobId
+    mapM_ (\f -> rmFile $ f jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName]
+    mapM_ (\f -> removeDirectoryRecursive $ f jobId) [getOutDirName, getTmpOutName]
+  where
+    rmFile f = Control.Exception.catch
+                  (removeFile f)
+                  (\e -> if isDoesNotExistError e then return () else throw e)
 
 createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
 createJob userId ip params fileInfo = do
