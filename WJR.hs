@@ -163,7 +163,7 @@ paramsForm fragment = do
     (fileR, fileV) <- aFormToForm $ fileAFormReq $
                          FieldSettings "Contigs file (FastA): "
                                        (Just "FastA file containing your contigs to annotate")
-                                       Nothing (Just "contigs") []
+                                       Nothing (Just "contigs") [("required","")]
 
     -- results :: [(Text, FormResult Text)]
     -- views :: [FieldView]
