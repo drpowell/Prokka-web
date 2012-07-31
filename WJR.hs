@@ -11,6 +11,7 @@ import Network.Wai
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Yesod.Auth.GoogleEmail
+import qualified Web.ClientSession as CS
 import Network.HTTP.Conduit (Manager,newManager,def)
 
 import AdminUsers (adminUser)
@@ -73,6 +74,11 @@ instance Yesod App where
     authRoute _ = Just $ AuthR LoginR
 
     isAuthorized = routeAuthorized
+
+    -- | Create the session backend.  Overriden here to increase session timeout to 2 weeks
+    makeSessionBackend _ = do
+        key <- CS.getKey CS.defaultKeyFile
+        return $ Just $ clientSessionBackend key (14 * 24 * 60)
 
     defaultLayout widget = do
         master <- getYesod
