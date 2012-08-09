@@ -10,3 +10,6 @@ h1 { padding-bottom: 10px; }
     img { margin-top: -10px }
   }
 }
+
+.username { margin-right: 5px; }
+.gravatar { padding: 5px 5px 0 0; }

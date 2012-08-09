@@ -13,6 +13,7 @@ import Yesod.Auth.BrowserId
 import Yesod.Auth.GoogleEmail
 import qualified Web.ClientSession as CS
 import Network.HTTP.Conduit (Manager,newManager,def)
+import Network.Gravatar as G
 
 import AdminUsers (adminUser)
 import Settings
@@ -97,6 +98,7 @@ instance Yesod App where
             $(widgetFile "default-layout")
 
         authId <- maybeAuthId
+        let mGravatar = authId >>= return . G.gravatar defGravatar
         let isAdmin = maybe False adminUser authId
         hamletToRepHtml $(hamletFile "templates/default-layout-wrapper.hamlet")
 
@@ -104,6 +106,9 @@ instance Yesod App where
     maximumContentLength _ (Just NewR) = 2 * 1024 * 1024 * 1024 -- 2 gigabytes
     maximumContentLength _ _ = 2 * 1024 * 1024 -- 2 megabytes
 
+defGravatar = G.defaultConfig { gSize = Just $ Size 30
+                              , gDefault = Just MM
+                              }
 
 instance YesodAuth App where
     type AuthId App = Text

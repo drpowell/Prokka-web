@@ -37,7 +37,9 @@
               <a class="brand" href=@{RootR}>Prokka</a>
               <div class="pull-right">
                 $maybe user <- authId
-                   <span class="label">#{user}
+                   $maybe gravatar <- mGravatar
+                     <img class=gravatar src=#{gravatar}>
+                   <span class="label username">#{user}
                    <a class="btn" href=@{AuthR LogoutR}>Logout
                 $nothing
                   <a class="btn" href=@{AuthR LoginR}>Login
