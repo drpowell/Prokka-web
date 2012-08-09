@@ -1,6 +1,6 @@
 #!/usr/bin/env runghc
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings,DeriveDataTypeable #-}
 
 import Jobs
 import Data.String
@@ -13,6 +13,7 @@ import System.Directory (canonicalizePath)
 import System.Time (getClockTime, diffClockTimes, timeDiffToString)
 import System.Posix.Types (CPid)
 import System.Process.Internals (ProcessHandle__(..),ProcessHandle(..),PHANDLE)
+import System.Console.CmdArgs hiding (name)
 import Control.Monad (when)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar (withMVar, newMVar, modifyMVar_, readMVar)
@@ -26,13 +27,8 @@ import ParamDefs
 maxLoad :: Double
 maxLoad = 4.0
 
-{-# NOINLINE debugMVar #-}
-debugMVar = unsafePerformIO $ newMVar False
-{-# NOINLINE isDebug #-}
-isDebug = unsafePerformIO $ readMVar debugMVar
-
-cmdLocation | isDebug = "/bin/echo"
-            | otherwise = "/bio/sw/vbc/prokka/bin/prokka"
+cmdLocation opts | debug opts = "/bin/echo"
+                 | otherwise = "/bio/sw/vbc/prokka/bin/prokka"
 
 safeRead :: (Read a) => String -> Maybe a
 safeRead s = case reads s of
@@ -66,34 +62,37 @@ getPID (ProcessHandle p) =
 
 logM msg = putStrLn msg
 
-buildCmdLine :: Job -> IO [String]
-buildCmdLine job = do dataFile <- canonicalizePath $ getDataFile (jobId job)
-                      return $ params ++ ["--fast", dataFile]
-    where
-      params = map T.unpack $ concatMap paramToOption paramDefs
-      paramToOption p = case M.lookup (name p) (jobParams job) of
-                          Nothing -> []
-                          Just val -> toRun p p val
+buildCmdLine :: Options -> Job -> IO [String]
+buildCmdLine opts job = do
+    dataFile <- canonicalizePath $ getDataFile (jobId job)
+    return $ params ++ fastOpt ++ [dataFile]
+  where
+    fastOpt = if fast opts then ["--fast"] else []
+    params = map T.unpack $ concatMap paramToOption paramDefs
+    paramToOption p = case M.lookup (name p) (jobParams job) of
+                        Nothing -> []
+                        Just val -> toRun p p val
 
-runJobId :: JobID -> IO ()
-runJobId jobId = do
+runJobId :: Options -> JobID -> IO ()
+runJobId opts jobId = do
   mJob <- infoJob jobId
   case mJob of
     Nothing -> logM $ "Bad jobId : "++show jobId
-    Just job -> runJob job
+    Just job -> runJob opts job
 
-runJob :: Job -> IO ()
-runJob job = do
+runJob :: Options -> Job -> IO ()
+runJob opts job = do
   outDir <- createTmpOut (jobId job)
   let statusFile = outDir ++ "/job-exit-status"
-  cmdLine <- buildCmdLine job
-  writeFile statusFile $ "Running : "++cmdLocation++" : "++show cmdLine++"\n\n"
+  cmdLine <- buildCmdLine opts job
+  writeFile statusFile $ "Running : "++cmdLocation opts++" : "++show cmdLine++"\n\n"
 
   inH <- openFile "/dev/null" ReadMode
   outH <- openFile (outDir ++ "/job-stdout") WriteMode
   errH <- openFile (outDir ++ "/job-stderr") WriteMode
   t1 <- getClockTime
-  hndl <- runProcess cmdLocation cmdLine (Just outDir) Nothing (Just inH) (Just outH) (Just errH)
+  hndl <- runProcess (cmdLocation opts) cmdLine
+                     (Just outDir) Nothing (Just inH) (Just outH) (Just errH)
   pid <- getPID hndl
   logM $ "  Running pid="++show pid
   writeFile (getStatusFile $ jobId job) (show pid)
@@ -107,19 +106,26 @@ runJob job = do
   jobDone $ jobId job
 
 
-runLoop prSleeping = do
+runLoop opts prSleeping = do
   next <- nextJob
   case next of
     Nothing -> do when prSleeping (logM "No jobs.  Sleeping...")
                   threadDelay $ 1000*1000
-                  runLoop False
+                  runLoop opts False
     Just jobId -> do logM $ "Running : "++show jobId
-                     runJobId jobId
-                     runLoop True
+                     runJobId opts jobId
+                     runLoop opts True
+
+data Options = Options { debug :: Bool
+                       , fast :: Bool
+                       } deriving (Show, Data, Typeable)
+
+options = Options
+ {debug = False &= help "Run in debug mode - no commands will be actually run"
+ ,fast  = False &= help "Run the jobs with a '--fast' option"
+ } &= summary "WJR runner.  Daemon to run tasks from the wjr web page"
 
 main = do
-  args <- getArgs
-  let setDebug = not . null . filter (\s -> "debug" `isInfixOf` s) $ args
-  modifyMVar_ debugMVar (\_ -> return setDebug)
-  putStrLn $ "Debug="++show isDebug++" : cmd="++cmdLocation
-  runLoop True
+  opts <- cmdArgs options
+  putStrLn $ "Running with options : "++show opts
+  runLoop options True
