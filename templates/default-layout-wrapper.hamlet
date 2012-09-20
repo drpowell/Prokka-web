@@ -46,9 +46,9 @@
               <div class="nav-collapse">
                 <ul class="nav">
                   <li><a href='http://bioinformatics.net.au/prokka-manual.html'>Manual</a></li>
+                  <li><a href=@{NewR}>Submit New Job</a></li>
                   $maybe _ <- authId
-                    <li><a href=@{QueueR}>Queue</a></li>
-                    <li><a href=@{NewR}>New Job</a></li>
+                    <li><a href=@{QueueR}>Your Job Queue</a></li>
                     $if isAdmin
                       <li><a href=@{AllJobsR}>All Jobs</a></li>
 

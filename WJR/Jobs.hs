@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WJR.Jobs
-    ( Job(..), Params, JobID, JobStatus(..)
+    ( Job(..), Params, JobID, JobStatus(..), isNullUserID
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
     , createTmpOut, jobDone, getStatusFile, getDataFile
@@ -39,6 +39,11 @@ type JobOutput = Text
 type JobID = Text
 type UserID = Text
 type Params = Map Text Text
+
+nullUserID :: UserID
+nullUserID = ""
+isNullUserID :: UserID -> Bool
+isNullUserID userId = T.null userId
 
 data JobStatus = JobWaiting
                | JobRunning ProcessID
@@ -163,8 +168,8 @@ deleteJob jobId = do
                                              , getOutDirName, getTmpOutName]
     return ()
 
-createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
-createJob userId ip params fileInfo = do
+createJob :: Maybe UserID -> Text -> Params -> FileInfo -> IO Job
+createJob mUserId ip params fileInfo = do
   (fname, hndl) <- newRandFile statusDir
   hClose hndl
   putStrLn $ "Writing to : "++fname
@@ -173,7 +178,7 @@ createJob userId ip params fileInfo = do
   let jobId = fnameToJobId fname
   let job = Job { jobParams = params
                 , jobId = jobId
-                , jobUser = userId
+                , jobUser = fromMaybe nullUserID mUserId
                 , jobStatus = JobWaiting
                 , jobMisc = fromList $ [("fileName", fileName fileInfo)
                                        ,("fileContentType", fileContentType fileInfo)

@@ -50,16 +50,16 @@ routeAuthorized r _write
     | adminRoutes r    = isAdmin
     | otherwise        = return $ Unauthorized "Not allowed"
   where
-    okRoutes RootR       = True
-    okRoutes (AuthR _)   = True
-    okRoutes (StaticR _) = True
-    okRoutes _           = False
-    loggedInRoutes QueueR         = True
-    loggedInRoutes NewR           = True
-    loggedInRoutes (JobR _)       = True
-    loggedInRoutes (JobDeleteR _) = True
-    loggedInRoutes (JobOutputR _) = True
-    loggedInRoutes _              = False
+    okRoutes RootR          = True
+    okRoutes (AuthR _)      = True
+    okRoutes (StaticR _)    = True
+    okRoutes NewR           = True
+    okRoutes (JobR _)       = True
+    okRoutes (JobDeleteR _) = True
+    okRoutes (JobOutputR _) = True
+    okRoutes _              = False
+    loggedInRoutes QueueR = True
+    loggedInRoutes _      = False
     adminRoutes AllJobsR = True
     adminRoutes _        = False
     loggedIn = do user <- maybeAuthId
@@ -226,7 +226,9 @@ checkAccess Nothing = notFound
 checkAccess (Just job) = do
   maid <- maybeAuthId
   case maid of
-    Nothing -> notFound
+    Nothing -> if isNullUserID (jobUser job)   -- User not logged in, check the job was submitted by such a user
+               then return ()
+               else notFound
     Just user -> if adminUser user || user == jobUser job
                  then return ()
                  else notFound
@@ -239,14 +241,14 @@ jobStatusText job = case jobStatus job of
 
 getJobR :: JobID -> Handler RepHtml
 getJobR jobId = do
-  authId <- maybeAuthId
+  mAuthId <- maybeAuthId
   job <- liftIO $ infoJob jobId
   checkAccess job
   case job of
     Nothing -> notFound
     Just job -> let params = toList $ jobParams job
                     status = jobStatusText job
-                    isAdmin = maybe False adminUser authId
+                    isAdmin = maybe False adminUser mAuthId
                     finished = case jobStatus job of { JobComplete _ -> True; _ -> False}
                 in defaultLayout $(widgetFile "job")
 
@@ -256,7 +258,10 @@ getJobDeleteR jobId = do
   checkAccess job
   liftIO $ deleteJob jobId
   setMessage $ msgLabel "Job Deleted"
-  redirect QueueR
+  maid <- maybeAuthId
+  if isNothing maid
+    then redirect RootR
+    else redirect QueueR
 
 msgLabel :: Text -> Html
 msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
@@ -266,7 +271,7 @@ requestIP = fmap (fromString . show . remoteHost . reqWaiRequest) getRequest
 
 handleNewR :: Handler RepHtml
 handleNewR = do
-    Just aid <- maybeAuthId
+    maid <- maybeAuthId
     ((result, widget), enctype) <- runFormPost paramsForm
     case result of
         FormSuccess params -> do ip <- requestIP
