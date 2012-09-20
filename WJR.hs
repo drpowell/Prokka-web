@@ -21,9 +21,9 @@ import Jobs
 import ParamDefs
 
 bootstrap_css, bootstrap_js, jquery_js :: Route Static
-bootstrap_css = StaticRoute ["bootstrap.css"]    []
-bootstrap_js = StaticRoute ["bootstrap-tooltip.js"]    []
-jquery_js = StaticRoute ["jquery-1.7.2.min.js"]    []
+bootstrap_css = StaticRoute ["bootstrap.css"]        []
+bootstrap_js  = StaticRoute ["bootstrap-tooltip.js"] []
+jquery_js     = StaticRoute ["jquery-1.7.2.min.js"]  []
 
 data App = App { getStatic :: Static
                , httpManager :: Manager
@@ -166,7 +166,6 @@ fieldBoolToText (Field parser viewer) = Field parser' viewer'
 data ParamForm = ParamForm { fileInfo :: FileInfo
                            , paramMap :: Map Text Text
                            }
-                 deriving (Show)
 
 -- Params for the jobs.  TODO - separate this out (how?)
 paramsForm :: Html -> MForm App App (FormResult ParamForm, Widget)

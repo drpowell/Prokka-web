@@ -184,9 +184,8 @@ createJob userId ip params fileInfo = do
   BS.hPut hndl (encode job)
   hClose hndl
 
-  hndl <- openFile (getDataFile jobId) WriteMode
-  BS.hPut hndl (fileContent fileInfo)
-  hClose hndl
+  fileMove fileInfo (getDataFile jobId)
+
   return job
 
 data ActualFile = InvalidPath | Directory [FilePath] | File FilePath
