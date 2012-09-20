@@ -223,7 +223,9 @@ getAllJobsR = do
   defaultLayout $(widgetFile "all-queue")
 
 checkAccess Nothing = notFound
-checkAccess (Just job) = do
+checkAccess (Just job)
+    | isNullUserID (jobUser job) = return ()   -- Job submitted by anonymous user, only need the jobId to access it
+    | otherwise = do
   maid <- maybeAuthId
   case maid of
     Nothing -> if isNullUserID (jobUser job)   -- User not logged in, check the job was submitted by such a user
