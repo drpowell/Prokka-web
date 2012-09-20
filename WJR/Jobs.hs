@@ -91,6 +91,7 @@ getOutDirName jobId = jobBasename jobId outputDir ".output"
 getStatusFile jobId = jobBasename jobId statusDir ".running"
 getDataFile   jobId = jobBasename jobId uploadDir ".file"
 getZipOutName jobId = jobBasename jobId outputDir ".zip"
+getStemName   jobId = jobBasename jobId statusDir ""
 
 createTmpOut :: JobID -> IO FilePath
 createTmpOut jobId = do
@@ -158,7 +159,7 @@ checkJobStatus jobId = do
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
     enforceOkJob jobId
-    rawSystem "rm" $ ["-rf"] ++ map ($jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName
+    rawSystem "rm" $ ["-rf"] ++ map ($jobId) [ getStemName, getInfoName, getStatusFile, getDataFile, getZipOutName
                                              , getOutDirName, getTmpOutName]
     return ()
 

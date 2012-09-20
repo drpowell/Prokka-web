@@ -5,12 +5,9 @@
 import WJR.Jobs
 import WJR.ParamDefs
 
-import Data.String
 import System.Exit
-import System.Environment
 import System.Process
 import System.IO
-import System.IO.Unsafe (unsafePerformIO)
 import System.Directory (canonicalizePath)
 import System.Time (getClockTime, diffClockTimes, timeDiffToString)
 import System.Posix.Types (CPid)
@@ -18,14 +15,10 @@ import System.Process.Internals (ProcessHandle__(..),ProcessHandle(..),PHANDLE)
 import System.Console.CmdArgs hiding (name)
 import Control.Monad (when)
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.MVar (withMVar, newMVar, modifyMVar_, readMVar)
+import Control.Concurrent.MVar (withMVar)
 import qualified Data.Map as M
 import qualified Data.Text as T
-import Data.List (isInfixOf, stripPrefix, isPrefixOf, tails)
 import Text.Regex.Posix
-
-maxLoad :: Double
-maxLoad = 4.0
 
 cmdLocation opts | debug opts = "/bin/echo"
                  | otherwise = "/bio/sw/vbc/prokka/bin/prokka"
@@ -37,16 +30,16 @@ safeRead s = case reads s of
 
 getLoad :: IO (Maybe Double)
 getLoad = do uptime <- readProcess "/usr/bin/uptime" [] ""
-             let regexp = "load average (([[:digit:]]|\\.)+)" :: String
+             let regexp = "load average: (([[:digit:]]|\\.)+)" :: String
              return $ case uptime =~ regexp of
                         [(_:s:_)] -> safeRead s
                         _ -> Nothing
 
-canRun :: IO Bool
-canRun = do mLoad <-getLoad
-            case mLoad of
-              Nothing -> putStrLn "Unable to read load" >> return False
-              Just load -> return $ load <= maxLoad
+canRun :: Options -> IO Bool
+canRun opts = do mLoad <-getLoad
+                 case mLoad of
+                   Nothing -> logM "WARNING: Unable to read load" >> return False
+                   Just load -> return $ load <= (maxLoad opts)
 
 exCode ExitSuccess = 0
 exCode (ExitFailure n) = n
@@ -63,11 +56,10 @@ getPID (ProcessHandle p) =
 logM msg = putStrLn msg
 
 buildCmdLine :: Options -> Job -> IO [String]
-buildCmdLine opts job = do
+buildCmdLine _opts job = do
     dataFile <- canonicalizePath $ getDataFile (jobId job)
-    return $ params ++ fastOpt ++ [dataFile]
+    return $ params ++ [dataFile]
   where
-    fastOpt = if fast opts then ["--fast"] else []
     params = map T.unpack $ concatMap paramToOption paramDefs
     paramToOption p = case M.lookup (name p) (jobParams job) of
                         Nothing -> []
@@ -105,27 +97,33 @@ runJob opts job = do
                 )
   jobDone $ jobId job
 
+data LastLoop = Sleeping | LoadTooHigh | Running deriving (Eq)
 
-runLoop opts prSleeping = do
-  next <- nextJob
-  case next of
-    Nothing -> do when prSleeping (logM "No jobs.  Sleeping...")
-                  threadDelay $ 1000*1000
-                  runLoop opts False
-    Just jobId -> do logM $ "Running : "++show jobId
-                     runJobId opts jobId
-                     runLoop opts True
+runLoop opts lastLoop = do
+    next <- nextJob
+    case next of
+      Nothing -> sleep Sleeping "No jobs. Sleeping..."
+      Just jobId -> do okRun <- canRun opts
+                       case okRun of
+                         False -> sleep LoadTooHigh "Load too high.  Sleeping..."
+                         True -> do logM $ "Running : "++show jobId
+                                    runJobId opts jobId
+                                    runLoop opts Running
+  where
+    sleep l msg = do when (l /= lastLoop) (logM msg)
+                     threadDelay $ 1000*1000
+                     runLoop opts l
 
 data Options = Options { debug :: Bool
-                       , fast :: Bool
+                       , maxLoad :: Double
                        } deriving (Show, Data, Typeable)
 
 options = Options
- {debug = False &= help "Run in debug mode - no commands will be actually run"
- ,fast  = False &= help "Run the jobs with a '--fast' option"
+ { debug   = False &= help "Run in debug mode - no commands will be actually run"
+ , maxLoad = 4     &= help "Only run jobs if the current system load is below this threshold"
  } &= summary "WJR runner.  Daemon to run tasks from the wjr web page"
 
 main = do
   opts <- cmdArgs options
   putStrLn $ "Running with options : "++show opts
-  runLoop options True
+  runLoop opts Running
