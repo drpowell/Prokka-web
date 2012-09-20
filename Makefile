@@ -4,9 +4,9 @@ ifdef PROF
 H_OPTS+=-prof -auto-all -L/usr/lib
 endif
 
-LIB_FILES=$(shell find . -name '*.hs')
+LIB_FILES=$(shell find WJR -name '*.hs' \! -name '.*' )
 
-BINARIES=WJR runner
+BINARIES=main runner
 
 .PHONY: all
 

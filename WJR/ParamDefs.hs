@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module ParamDefs
+module WJR.ParamDefs
     ( ParamField(..), FieldType(..), paramDefs
     ) where
 
-import GeneticCodes
+import WJR.GeneticCodes
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.String

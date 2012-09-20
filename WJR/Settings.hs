@@ -1,4 +1,4 @@
-module Settings
+module WJR.Settings
   where
 
 import Yesod.Default.Util

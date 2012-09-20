@@ -2,7 +2,8 @@
 {-# LANGUAGE TypeFamilies, QuasiQuotes, MultiParamTypeClasses,
              TemplateHaskell, OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts, TupleSections #-}
-import Imports
+import WJR.Imports
+
 import Yesod.Static (Static, Route(..), static)
 import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
@@ -15,10 +16,10 @@ import qualified Web.ClientSession as CS
 import Network.HTTP.Conduit (Manager,newManager,def)
 import Network.Gravatar as G
 
-import AdminUsers (adminUser)
-import Settings
-import Jobs
-import ParamDefs
+import WJR.AdminUsers (adminUser)
+import WJR.Settings
+import WJR.Jobs
+import WJR.ParamDefs
 
 bootstrap_css, bootstrap_js, jquery_js :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]        []

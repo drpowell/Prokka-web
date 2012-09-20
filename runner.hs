@@ -2,7 +2,9 @@
 
 {-# LANGUAGE OverloadedStrings,DeriveDataTypeable #-}
 
-import Jobs
+import WJR.Jobs
+import WJR.ParamDefs
+
 import Data.String
 import System.Exit
 import System.Environment
@@ -21,8 +23,6 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.List (isInfixOf, stripPrefix, isPrefixOf, tails)
 import Text.Regex.Posix
-
-import ParamDefs
 
 maxLoad :: Double
 maxLoad = 4.0

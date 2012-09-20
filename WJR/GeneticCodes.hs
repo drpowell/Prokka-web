@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module GeneticCodes
+module WJR.GeneticCodes
     where
 
 import Data.String

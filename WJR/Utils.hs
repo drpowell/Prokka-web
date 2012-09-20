@@ -1,4 +1,4 @@
-module Utils
+module WJR.Utils
     ( newRandFile
     ) where
 

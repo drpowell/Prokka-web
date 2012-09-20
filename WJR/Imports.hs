@@ -1,4 +1,4 @@
-module Imports
+module WJR.Imports
     ( module Yesod
     , Text
     , module Data.Map

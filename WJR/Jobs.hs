@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Jobs
+module WJR.Jobs
     ( Job(..), Params(..), JobID(..), JobStatus(..)
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
@@ -9,7 +9,7 @@ module Jobs
     , jobIP, jobTime
     ) where
 
-import Imports
+import WJR.Imports
 import System.IO
 import System.IO.Error (isDoesNotExistError)
 import Control.Exception
@@ -26,7 +26,7 @@ import System.Posix.Files (getFileStatus, modificationTime)
 import System.FilePath.Posix (takeBaseName)
 import System.Time (getClockTime)
 import System.Process (rawSystem)
-import Utils (newRandFile)
+import WJR.Utils (newRandFile)
 
 
 fileDir :: FilePath
