@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WJR.Jobs
-    ( Job(..), Params(..), JobID(..), JobStatus(..)
+    ( Job(..), Params, JobID, JobStatus(..)
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
     , createTmpOut, jobDone, getStatusFile, getDataFile
@@ -29,8 +29,11 @@ import System.Process (rawSystem)
 import WJR.Utils (newRandFile)
 
 
-fileDir :: FilePath
-fileDir = "uploads"
+uploadDir,outputDir,statusDir :: FilePath
+prefixDir = "user-files"
+uploadDir = prefixDir ++ "/uploads"
+outputDir = prefixDir ++ "/output"
+statusDir = prefixDir ++ "/status"
 
 type JobOutput = Text
 type JobID = Text
@@ -68,26 +71,26 @@ instance ToJSON Job where
                       ,"misc"   .= jobMisc job
                       ]
 
-jobBasename :: JobID -> FilePath
-jobBasename jobId = fileDir ++ "/" ++ T.unpack jobId
+jobBasename :: JobID -> FilePath -> String -> FilePath
+jobBasename jobId dir ext = dir ++ "/" ++ T.unpack jobId ++ ext
 
 fnameToJobId :: FilePath -> JobID
 fnameToJobId fname = fromString (takeBaseName fname)
 
 okFile :: FilePath -> Bool
-okFile fname = fileDir `isPrefixOf` fname && not (".." `isInfixOf` fname)
+okFile fname = prefixDir `isPrefixOf` fname && not (".." `isInfixOf` fname)
 
 enforceOkJob :: JobID -> IO ()
 enforceOkJob jobId = if okFile (getInfoName jobId)
                        then return ()
                        else error $ "Bad job id : "++(T.unpack jobId)
 
-getInfoName   jobId = jobBasename jobId ++ ".info"
-getTmpOutName jobId = jobBasename jobId ++ ".tmpout"
-getOutDirName jobId = jobBasename jobId ++ ".output"
-getStatusFile jobId = jobBasename jobId ++ ".running"
-getDataFile   jobId = jobBasename jobId ++ ".file"
-getZipOutName jobId = jobBasename jobId ++ ".zip"
+getInfoName   jobId = jobBasename jobId statusDir ".info"
+getTmpOutName jobId = jobBasename jobId statusDir ".tmpout"
+getOutDirName jobId = jobBasename jobId outputDir ".output"
+getStatusFile jobId = jobBasename jobId statusDir ".running"
+getDataFile   jobId = jobBasename jobId uploadDir ".file"
+getZipOutName jobId = jobBasename jobId outputDir ".zip"
 
 createTmpOut :: JobID -> IO FilePath
 createTmpOut jobId = do
@@ -104,7 +107,7 @@ jobsForUser uid = filter ((uid ==) . jobUser) <$> allJobs
 
 allJobIds :: IO [JobID]
 allJobIds = do
-  files <- getDirectoryContents fileDir
+  files <- getDirectoryContents statusDir
   let jobFiles = filter (\f -> (not $ "." `isInfixOf` f)) files
   return $ map fnameToJobId jobFiles
 
@@ -163,7 +166,7 @@ deleteJob jobId = do
 
 createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
 createJob userId ip params fileInfo = do
-  (fname, hndl) <- newRandFile fileDir
+  (fname, hndl) <- newRandFile statusDir
   hClose hndl
   putStrLn $ "Writing to : "++fname
 
@@ -220,8 +223,8 @@ zippedOutput jobId = do
        else do mkZipFile jobId
                return zipFile
   where
-    stripFileDir p = fromJust $ stripPrefix (fileDir++"/") p
-    mkZipFile jobId = rawSystem "./zip-output.sh" [fileDir  -- cd to here
+    stripFileDir p = fromJust $ stripPrefix (outputDir++"/") p
+    mkZipFile jobId = rawSystem "./zip-output.sh" [outputDir  -- cd to here
                                                   , stripFileDir $ getOutDirName jobId  -- What to zip
                                                   , stripFileDir $ getZipOutName jobId  -- Where to put it
                                                   ]
