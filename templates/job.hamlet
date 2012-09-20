@@ -1,3 +1,10 @@
+$maybe user <- mAuthId
+$nothing
+  <div class="alert">
+    You must record the
+    <a href=@{JobR jobId}>link
+    to this page to be able to return to it later.  In future, consider logging in so that you can track your job queue.
+
 $if isAdmin
   <p>User : #{jobUser job}
 <p>Job : #{jobId}

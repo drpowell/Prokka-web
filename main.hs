@@ -264,7 +264,7 @@ getJobDeleteR jobId = do
     else redirect QueueR
 
 msgLabel :: Text -> Html
-msgLabel msg = [shamlet|<span class="label label-success">#{msg}</span>|]
+msgLabel msg = [shamlet|<div class="alert alert-success">#{msg}</div>|]
 
 requestIP :: Handler Text
 requestIP = fmap (fromString . show . remoteHost . reqWaiRequest) getRequest
