@@ -10,15 +10,16 @@ module WJR.Jobs
     ) where
 
 import WJR.Imports
+import WJR.Utils (newRandFile)
+
 import System.IO
-import System.IO.Error (isDoesNotExistError)
 import Control.Exception
 import Control.Monad (filterM,mzero)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.List
-import System.Directory (removeFile,removeDirectoryRecursive,doesDirectoryExist,getDirectoryContents
+import System.Directory (doesDirectoryExist,getDirectoryContents
                         ,createDirectory,renameDirectory,doesFileExist)
 import Data.Aeson
 import System.Posix.Types (ProcessID)
@@ -26,7 +27,6 @@ import System.Posix.Files (getFileStatus, modificationTime)
 import System.FilePath.Posix (takeBaseName)
 import System.Time (getClockTime)
 import System.Process (rawSystem)
-import WJR.Utils (newRandFile)
 
 
 uploadDir,outputDir,statusDir :: FilePath
@@ -130,12 +130,13 @@ infoJob jobId = do
   enforceOkJob jobId
   let fname = getInfoName jobId
   if okFile fname
-    then do json <- decode <$> BS.readFile fname
-            case json of
-              Just x -> do status <- checkJobStatus jobId
-                           return . Just $ x { jobStatus = status }
-              Nothing -> do putStrLn "Failed to parse json"
-                            return Nothing
+    then handle ((\_ -> return Nothing) :: IOException -> IO (Maybe Job)) $
+           do json <- decode <$> BS.readFile fname
+              case json of
+                Just x -> do status <- checkJobStatus jobId
+                             return . Just $ x { jobStatus = status }
+                Nothing -> do putStrLn "Failed to parse json"
+                              return Nothing
     else do putStrLn "Bad fname"
             return Nothing
 
@@ -157,12 +158,9 @@ checkJobStatus jobId = do
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
     enforceOkJob jobId
-    mapM_ (\f -> rmFile $ f jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName]
-    mapM_ (\f -> removeDirectoryRecursive $ f jobId) [getOutDirName, getTmpOutName]
-  where
-    rmFile f = Control.Exception.catch
-                  (removeFile f)
-                  (\e -> if isDoesNotExistError e then return () else throw e)
+    rawSystem "rm" $ ["-rf"] ++ map ($jobId) [getInfoName, getStatusFile, getDataFile, getZipOutName
+                                             , getOutDirName, getTmpOutName]
+    return ()
 
 createJob :: UserID -> Text -> Params -> FileInfo -> IO Job
 createJob userId ip params fileInfo = do
