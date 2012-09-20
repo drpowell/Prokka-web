@@ -3,22 +3,35 @@ $nothing
   <div class="alert">
     You must record the
     <a href=@{JobR jobId}>link
-    to this page to be able to return to it later.  In future, consider logging in so that you can track your job queue.
+    to this page to be able to return to it later.  In future, consider
+    <a href=@{AuthR LoginR}>logging in
+    so that you can track your job queue.
 
-$if isAdmin
-  <p>User : #{jobUser job}
-<p>Job : #{jobId}
-<p>Status : #{status}
-<p>Submitted : #{jobTime job}
-<p>Parameters
-$forall (key,val) <- params
-  <li><b>#{key}</b>: #{val}
-<p>
-$if finished
+
+<h2>Job Info
+<div .row>
+  <div .span4>
+    <table class="table">
+      $if isAdmin
+        <tr><th>User<td>#{jobUser job}
+      <tr><th>Job<td>#{jobId}
+      <tr><th>Status<td>#{status}
+      <tr><th>Submitted<td>#{jobTime job}
+
+<h3>Parameters
+<div .row>
+  <div .span2>
+    <table class="table table-condensed">
+      $forall (key,val) <- params
+        <tr><th>#{key}<td>#{val}
+
+
+<div .row>
+  $if finished
+    <div>
+      <a href=@{jobOutputLink jobId}>Browse Output
+    <div>
+      <a href=@{jobOutputZippedLink jobId}>Download zipped output
   <div>
-    <a href=@{jobOutputLink jobId}>Browse Output
-  <div>
-    <a href=@{jobOutputZippedLink jobId}>Download zipped output
-<div>
-  <a href=@{JobDeleteR jobId}>Delete Job
+    <a href=@{JobDeleteR jobId}>Delete Job
 
