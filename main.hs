@@ -275,9 +275,9 @@ handleNewR = do
     ((result, widget), enctype) <- runFormPost paramsForm
     case result of
         FormSuccess params -> do ip <- requestIP
-                                 liftIO $ createJob aid ip (paramMap params) (fileInfo params)
+                                 job <- liftIO $ createJob maid ip (paramMap params) (fileInfo params)
                                  setMessage $ msgLabel "Job created."
-                                 redirect QueueR
+                                 redirect $ JobR (jobId job)
         _ ->  defaultLayout $(widgetFile "new-job")
 
 
