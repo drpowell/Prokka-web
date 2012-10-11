@@ -8,6 +8,7 @@ import Yesod.Static (Static, Route(..), static)
 import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
 import Network.Wai
+-- import Network.Wai.Handler.CGI as CGI
 
 import Yesod.Auth
 import Yesod.Auth.BrowserId
@@ -72,7 +73,7 @@ routeAuthorized r _write
                     Just user -> if adminUser user then Authorized else undefined Unauthorized "Admin only"
 
 instance Yesod App where
-    approot = ApprootStatic "http://dna.med.monash.edu.au:3000"
+    approot = ApprootStatic $ T.pack approotSetting
     authRoute _ = Just $ AuthR LoginR
 
     isAuthorized = routeAuthorized
@@ -140,7 +141,9 @@ instance RenderMessage App FormMessage where
 main = do
   st <- static "static"
   man <- newManager def
-  warpDebug 3000 (App st man)
+  let app = App st man
+  warpDebug 3000 app
+  -- toWaiApp app >>= run
 
 
 ----------------------------------------------------------------------

@@ -19,3 +19,8 @@ clean:
 	rm -f *.o *.hi $(BINARIES)
 	find . \( -name '*.o' -o -name '*.hi' \) -exec rm {} \;
 
+install: all
+	mkdir -p ~prokka/bin ~prokka/user-files/uploads ~prokka/user-files/status ~prokka/user-files/output
+	cp main runner ~prokka/bin
+	cp -r static ~prokka
+	cp -r templates ~prokka

@@ -27,7 +27,11 @@
         <script>
           document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/,'js');
     <body>
+      <div class="dave">
         <div class="navbar navbar-fixed-top">
+          <div>
+            <img src="http://vicbioinformatics.com/images/vbc/vbc-60h.jpg">
+            <h1>Victorian Bioinformatics Consortium
           <div class="navbar-inner">
             <div class="container">
               <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
