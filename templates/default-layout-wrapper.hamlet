@@ -29,9 +29,6 @@
     <body>
       <div class="dave">
         <div class="navbar navbar-fixed-top">
-          <div>
-            <img src="http://vicbioinformatics.com/images/vbc/vbc-60h.jpg">
-            <h1>Victorian Bioinformatics Consortium
           <div class="navbar-inner">
             <div class="container">
               <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
@@ -49,15 +46,23 @@
                   <a class="btn" href=@{AuthR LoginR}>Login
               <div class="nav-collapse">
                 <ul class="nav">
-                  <li><a href='http://bioinformatics.net.au/prokka-manual.html'>Manual</a></li>
-                  <li><a href=@{NewR}>Submit New Job</a></li>
+                  <li><a href=@{AboutR}>About</a></li>
                   $maybe _ <- authId
+                    <li><a href=@{NewR}>Submit New Job</a></li>
                     <li><a href=@{QueueR}>Your Job Queue</a></li>
                     $if isAdmin
                       <li><a href=@{AllJobsR}>All Jobs</a></li>
+                  $nothing
+                    <li><a href=@{NewR}>Submit Anonymous Job</a></li>
 
         <div class="container">
             <div id="main" role="main">
               ^{pageBody pc}
             <footer>
-                <p>&copy; Victorian Bioinformatics Consortium
+                <hr>
+                <p class=author>&copy; 
+                  <a href="mailto:david.powell@monash.edu.au">David R. Powell
+                  &amp;
+                  <a href="mailto:torsten.seemann@monash.edu.au">Torsten Seemann
+                <a href="http://vicbioinformatics.com">
+                  <img class="logo" src="http://vicbioinformatics.com/images/vbc/vbc-60h.jpg">

@@ -1,0 +1,19 @@
+
+<h1>Prokka
+
+<p>
+  Prokka is a tool for annotating prokaryote genomes.
+<p>
+  This is a web interface to the 
+  <a href="http://vicbioinformatics.com/prokka-manual.html">Prokka
+  command line tool.  Prokka was written by
+  <a href="mailto:torsten.seemann@monash.edu.au">Torsten Seemann</a>,
+  this Prokka web interface by 
+  <a href="mailto:david.powell@monash.edu.au">David R. Powell</a>.
+<p>
+  You may submit jobs anonymously, or log in using a google account, or using 
+  <a href="https://login.persona.org/">Mozilla BrowserID
+
+Please cite:
+<pre>
+    Prokka, ....
