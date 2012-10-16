@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module WJR.Settings
   where
 
@@ -8,11 +9,15 @@ import Text.Hamlet
 -- import Default_Util
 import Language.Haskell.TH.Syntax
 
--- approotSetting = "http://127.0.0.1:3000"
-approotSetting = "http://dna.med.monash.edu.au/prokka"
-
+#ifdef PRODUCTION
+development = False
+listenPort = 3000
+approotSetting = "http://vicbioinformatics.com/prokka"
+#else
 development = True
-
+listenPort = 3001
+approotSetting = "http://dna.med.monash.edu.au:"++show listenPort
+#endif
 
 -- | Settings for 'widgetFile', such as which template languages to support and
 -- default Hamlet settings.

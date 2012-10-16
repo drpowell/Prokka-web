@@ -36,6 +36,7 @@ mkYesod "App" [parseRoutes|
 /auth AuthR Auth getAuth
 /static StaticR Static getStatic
 
+/about AboutR GET
 /queue QueueR GET
 /new NewR
 /job/#Text JobR GET
@@ -58,6 +59,7 @@ routeAuthorized r _write
     okRoutes (JobR _)       = True
     okRoutes (JobDeleteR _) = True
     okRoutes (JobOutputR _) = True
+    okRoutes AboutR         = True
     okRoutes _              = False
     loggedInRoutes QueueR = True
     loggedInRoutes _      = False
@@ -142,7 +144,7 @@ main = do
   st <- static "static"
   man <- newManager def
   let app = App st man
-  warpDebug 3000 app
+  warpDebug (fromIntegral listenPort) app
   -- toWaiApp app >>= run
 
 
@@ -214,6 +216,9 @@ myJobs = do
 
 getRootR :: Handler RepHtml
 getRootR = defaultLayout $(widgetFile "home")
+
+getAboutR :: Handler RepHtml
+getAboutR = defaultLayout $(widgetFile "about")
 
 getQueueR :: Handler RepHtml
 getQueueR = do
