@@ -4,6 +4,7 @@
 
 import WJR.Jobs
 import WJR.ParamDefs
+import WJR.Mail
 
 import System.Exit
 import System.Process
@@ -96,6 +97,7 @@ runJob opts job = do
                  "\nElapsed time : "++timeDiffToString (diffClockTimes t2 t1)++"\n"
                 )
   jobDone $ jobId job
+  jobDoneEmail job
 
 data LastLoop = Sleeping | LoadTooHigh | Running deriving (Eq)
 

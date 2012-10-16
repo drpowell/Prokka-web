@@ -38,6 +38,7 @@ paramDefs =
        ,ParamField "gram" "Gram" "Gram +ve or Gram -ve" (ListField grams) Nothing runGram
        ,ParamField "addgenes" "Add genes" "Add 'gene' features for each 'CDS' feature" CheckBoxField Nothing runBool
        ,ParamField "usegenus" "Use genus" "Use genus-specific BLAST databases (requires 'Genus' above to be defined)"  CheckBoxField Nothing runBool
+       ,ParamField "email" "Send Email" "Send an email upon job completion"  CheckBoxField (Just "yes") runNo
        ]
 
 runNo, runId, runBool, runGram :: ParamField a b -> Text -> [Text]
