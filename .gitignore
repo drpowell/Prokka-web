@@ -3,3 +3,5 @@
 runner
 main
 user-files/
+.fuse_hidden*
+.#*

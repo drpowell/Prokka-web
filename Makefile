@@ -10,7 +10,7 @@ endif
 
 LIB_FILES=$(shell find WJR -name '*.hs' \! -name '.*' )
 
-BINARIES=main runner
+BINARIES=prokka-web prokka-runner
 
 .PHONY: all
 

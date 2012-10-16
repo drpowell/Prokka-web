@@ -1,7 +1,10 @@
-#!/usr/bin/env runghc
 {-# LANGUAGE TypeFamilies, QuasiQuotes, MultiParamTypeClasses,
              TemplateHaskell, OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts, TupleSections #-}
+
+module WJR.Application
+    where
+
 import WJR.Imports
 
 import Yesod.Static (Static, Route(..), static)
@@ -140,13 +143,13 @@ instance RenderMessage App FormMessage where
     renderMessage _ _ = defaultFormMessage
 
 
-main = do
+
+defaultMain = do
   st <- static "static"
   man <- newManager def
   let app = App st man
   warpDebug (fromIntegral listenPort) app
   -- toWaiApp app >>= run
-
 
 ----------------------------------------------------------------------
 
