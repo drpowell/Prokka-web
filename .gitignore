@@ -1,7 +1,7 @@
 *.hi
 *.o
-runner
-main
+prokka-runner
+prokka-web
 user-files/
 .fuse_hidden*
 .#*

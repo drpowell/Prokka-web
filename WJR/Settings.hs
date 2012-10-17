@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, NoMonomorphismRestriction #-}
 module WJR.Settings
   where
 
+import Yesod (warpDebug, warp)
 import Yesod.Default.Util
 import Data.Default (def)
 import Text.Hamlet
@@ -13,10 +14,12 @@ import Language.Haskell.TH.Syntax
 development = False
 listenPort = 3000
 approotSetting = "http://vicbioinformatics.com/prokka"
+runWarp = warp
 #else
 development = True
 listenPort = 3001
 approotSetting = "http://dna.med.monash.edu.au:"++show listenPort
+runWarp = warpDebug
 #endif
 
 -- | Settings for 'widgetFile', such as which template languages to support and

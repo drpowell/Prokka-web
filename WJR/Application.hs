@@ -148,7 +148,7 @@ defaultMain = do
   st <- static "static"
   man <- newManager def
   let app = App st man
-  warpDebug (fromIntegral listenPort) app
+  runWarp (fromIntegral listenPort) app
   -- toWaiApp app >>= run
 
 ----------------------------------------------------------------------
