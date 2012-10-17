@@ -92,12 +92,18 @@ runJob opts job = do
   code <- waitForProcess hndl
   mapM_ hClose [inH, outH, errH]
   t2 <- getClockTime
+  when (exCode code == 0) $ writeFile (getSuccessFile $ jobId job) ""
   appendFile statusFile
                 ("Process exited with code : "++show (exCode code)++
                  "\nElapsed time : "++timeDiffToString (diffClockTimes t2 t1)++"\n"
                 )
   jobDone $ jobId job
-  jobDoneEmail job
+
+  -- We now need to reload the job to get it proper status.
+  mJobUpdated <- infoJob $ jobId job
+  case mJobUpdated of
+    Just job -> jobDoneEmail job
+    Nothing -> logM $ "WARNING: job disappeared!"
 
 data LastLoop = Sleeping | LoadTooHigh | Running deriving (Eq)
 
@@ -122,7 +128,7 @@ data Options = Options { debug :: Bool
 
 options = Options
  { debug   = False &= help "Run in debug mode - no commands will be actually run"
- , maxLoad = 4     &= help "Only run jobs if the current system load is below this threshold"
+ , maxLoad = 8     &= help "Only run jobs if the current system load is below this threshold"
  } &= summary "WJR runner.  Daemon to run tasks from the wjr web page"
 
 main = do

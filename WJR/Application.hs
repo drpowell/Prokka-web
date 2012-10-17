@@ -250,7 +250,8 @@ jobStatusText :: Job -> Text
 jobStatusText job = case jobStatus job of
                       JobWaiting -> "Waiting"
                       JobRunning _ -> "Running..."
-                      JobComplete _ -> "Finished"
+                      JobComplete JobSuccess -> "Finished"
+                      JobComplete JobFailure -> "FAILED"
 
 getJobR :: JobID -> Handler RepHtml
 getJobR jobId = do

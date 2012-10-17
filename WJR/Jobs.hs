@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WJR.Jobs
-    ( Job(..), Params, JobID, JobStatus(..), isNullUserID
+    ( Job(..), Params, JobID, JobStatus(..), JobOutput(..), isNullUserID
     , allJobIds, nextJob, allJobs, jobsForUser
     , deleteJob, createJob, infoJob
-    , createTmpOut, jobDone, getStatusFile, getDataFile
+    , createTmpOut, jobDone, getStatusFile, getSuccessFile, getDataFile
     , getActualFile, ActualFile(..), zippedOutput
 
     , jobIP, jobTime
@@ -35,7 +35,6 @@ uploadDir = prefixDir ++ "/uploads"
 outputDir = prefixDir ++ "/output"
 statusDir = prefixDir ++ "/status"
 
-type JobOutput = Text
 type JobID = Text
 type UserID = Text
 type Params = Map Text Text
@@ -44,6 +43,8 @@ nullUserID :: UserID
 nullUserID = ""
 isNullUserID :: UserID -> Bool
 isNullUserID userId = T.null userId
+
+data JobOutput = JobSuccess | JobFailure deriving (Eq, Show)
 
 data JobStatus = JobWaiting
                | JobRunning ProcessID
@@ -94,6 +95,7 @@ getInfoName   jobId = jobBasename jobId statusDir ".info"
 getTmpOutName jobId = jobBasename jobId statusDir ".tmpout"
 getOutDirName jobId = jobBasename jobId outputDir ".output"
 getStatusFile jobId = jobBasename jobId statusDir ".running"
+getSuccessFile jobId = jobBasename jobId statusDir ".success"
 getDataFile   jobId = jobBasename jobId uploadDir ".file"
 getZipOutName jobId = jobBasename jobId outputDir ".zip"
 getStemName   jobId = jobBasename jobId statusDir ""
@@ -155,7 +157,8 @@ checkJobStatus :: JobID -> IO JobStatus
 checkJobStatus jobId = do
   enforceOkJob jobId
   haveOutDir <- doesDirectoryExist (getOutDirName jobId)
-  if haveOutDir then return $ JobComplete "done"
+  success <- doesFileExist (getSuccessFile jobId)
+  if haveOutDir then return $ JobComplete $ if success then JobSuccess else JobFailure
     else do running <- tryReadFile (getStatusFile jobId)
             case running of
               Just x -> return $ JobRunning (read $ T.unpack x)
@@ -164,7 +167,8 @@ checkJobStatus jobId = do
 deleteJob :: JobID -> IO ()
 deleteJob jobId = do
     enforceOkJob jobId
-    rawSystem "rm" $ ["-rf"] ++ map ($jobId) [ getStemName, getInfoName, getStatusFile, getDataFile, getZipOutName
+    rawSystem "rm" $ ["-rf"] ++ map ($jobId) [ getStemName, getInfoName, getStatusFile, getSuccessFile, getDataFile
+                                             , getZipOutName
                                              , getOutDirName, getTmpOutName]
     return ()
 

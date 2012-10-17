@@ -24,10 +24,11 @@ import qualified Data.Text.Lazy.Encoding as LT
 mkAddress :: String -> String -> Address
 mkAddress name email = Address (Just $ fromString name) $ fromString email
 
-emailBody :: T.Text -> LT.Text
-emailBody jobId = LT.pack . renderHtml $ body myRender
+emailBody :: Job -> LT.Text
+emailBody job = LT.pack . renderHtml $ body myRender
   where
-    body = [hamlet|Your prokka job has finished! Check the results here : @{JobR jobId}|]
+    body = [hamlet|Your prokka job has #{status}! Check the results here : @{JobR $ jobId job}|]
+    status = jobStatusText job
     app = error "No Yesod set in mail sending" :: App
     myRender a _ = let (x,y) = renderRoute a
                    in T.decodeUtf8 $ Blaze.ByteString.Builder.toByteString $ joinPath app (T.pack approotSetting) x y
@@ -40,7 +41,7 @@ jobDoneEmail job
   subject = "Job Finished!"
   to = mkAddress (T.unpack $ jobUser job) (T.unpack $ jobUser job)
   from = mkAddress "Prokka web service" "noreply@vicbioinformatics.com"
-  plainBody = emailBody (jobId job)
+  plainBody = emailBody job
   doSend = renderSendMail $ Mail
              { mailFrom = from
              , mailTo   = [to]
