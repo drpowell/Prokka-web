@@ -8,3 +8,4 @@ sudo -u prokka cp -f prokka-web prokka-runner ~prokka/bin
 sudo -u prokka cp -r static ~prokka
 sudo -u prokka cp -r templates ~prokka
 
+sudo -u prokka killall prokka-runner prokka-web

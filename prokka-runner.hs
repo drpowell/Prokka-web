@@ -133,5 +133,6 @@ options = Options
 
 main = do
   opts <- cmdArgs options
-  putStrLn $ "Running with options : "++show opts
+  hPutStrLn stderr $ "Running with options : "++show opts
+  system "env"
   runLoop opts Running
