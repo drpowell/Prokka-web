@@ -1,6 +1,6 @@
  <ul class="jqueryFileTree" style="display: none;">
-  $forall (isDir,file,name) <- files
+  $forall (isDir,file,name,abs) <- files
     $if isDir
       <li class="directory collapsed"><a href="#" rel="#{file}/">#{name}</a>
     $else
-      <li class="file ext_txt"><a href="#" rel="#{file}">#{name}</a>
+      <li class="file ext_txt"><a href="@{abs}" rel="#{file}">#{name}</a>

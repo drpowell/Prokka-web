@@ -356,5 +356,6 @@ postJobFilesAjaxR jobId _ = do
                                             in hamletToRepHtml $(hamletFile "templates/output-files.hamlet")
   where
     splitDir dir = map T.pack $ splitDirectories $ T.unpack dir
-    toView (isDir, path) = (isDir,path,last $ splitDirectories path)
+    toView (isDir, path) = let dirs = splitDirectories path
+                           in (isDir, path, last dirs, JobFilesAjaxR jobId (map T.pack dirs))
 

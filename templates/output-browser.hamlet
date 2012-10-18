@@ -1,2 +1,5 @@
 <h2>Job Output
-  <div id="file_browser">
+  <div class="row">
+    <div class="span4" id="file_browser">
+    <div class="span8" id="file_contents">
+      <textarea readonly="readonly">
