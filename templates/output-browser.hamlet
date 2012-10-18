@@ -1,7 +1,2 @@
-$if null files
-  No output files
-$else
-  <ul>
-  $forall file <- files
-    <li>
-      <a href=@{JobOutputR file}>#{fileName file}
+<h2>Job Output
+  <div id="file_browser">

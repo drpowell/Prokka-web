@@ -1,0 +1,7 @@
+$(document).ready( function() {
+    $('#file_browser').fileTree({ root: '/',
+                                  script: "@{JobFilesAjaxR jobId empList}"
+                                }, function(file) {
+                                    document.location.href = "@{JobFilesAjaxR jobId empList}"+file;
+                                });
+});

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings,TupleSections #-}
 module WJR.Jobs
     ( Job(..), Params, JobID, JobStatus(..), JobOutput(..), isNullUserID
     , allJobIds, nextJob, allJobs, jobsForUser
@@ -24,7 +24,7 @@ import System.Directory (doesDirectoryExist,getDirectoryContents
 import Data.Aeson
 import System.Posix.Types (ProcessID)
 import System.Posix.Files (getFileStatus, modificationTime)
-import System.FilePath.Posix (takeBaseName)
+import System.FilePath.Posix as FP (takeBaseName)
 import System.Time (getClockTime)
 import System.Process (rawSystem)
 
@@ -199,7 +199,7 @@ createJob mUserId ip params fileInfo = do
 
   return job
 
-data ActualFile = InvalidPath | Directory [FilePath] | File FilePath
+data ActualFile = InvalidPath | Directory [(Bool, FilePath)] | File FilePath
 
 getActualFile :: JobID -> [Text] -> IO ActualFile
 getActualFile jobId subPathT
@@ -212,14 +212,22 @@ getActualFile jobId subPathT
             else do isFile <- doesFileExist actualDir
                     if isFile
                        then return $ File actualDir
-                       else do files <- getDirectoryContents actualDir
-                               return . Directory $ filter (\f -> not $ "." `isPrefixOf` f) files
+                       else do isDir <- doesDirectoryExist actualDir
+                               if not isDir
+                                  then return InvalidPath
+                                  else dirContents
   where
+    join ls = intercalate "/" ls
+    remDotFiles files = filter (\f -> not $ "." `isPrefixOf` f) files
+    relativePath f = join $ subPath ++ [f]
     subPath = map T.unpack subPathT
-    actualDir = getOutDirName jobId ++ case subPath of
-                                         [] -> ""
-                                         _ -> "/" ++ intercalate "/" subPath
+    actualDir = join $ [getOutDirName jobId] ++ subPath
     checkValidPath path = null $ filter (\f -> "." `isPrefixOf` f) path
+
+    dirContents = do files <- remDotFiles <$> getDirectoryContents actualDir
+                     isDirs <- mapM (\f -> (,relativePath f) <$> doesDirectoryExist (join [actualDir,f])) files
+                     return $ Directory isDirs
+
 
 zippedOutput :: JobID -> IO FilePath
 zippedOutput jobId = do

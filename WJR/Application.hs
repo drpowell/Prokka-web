@@ -11,6 +11,7 @@ import Yesod.Static (Static, Route(..), static)
 import Text.Hamlet (hamletFile,shamlet)
 import qualified Data.Text as T
 import Network.Wai
+import System.FilePath (splitDirectories)
 -- import Network.Wai.Handler.CGI as CGI
 
 import Yesod.Auth
@@ -29,6 +30,8 @@ bootstrap_css, bootstrap_js, jquery_js :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]        []
 bootstrap_js  = StaticRoute ["bootstrap-tooltip.js"] []
 jquery_js     = StaticRoute ["jquery-1.7.2.min.js"]  []
+jfileTree_css = StaticRoute ["jqueryFileTree","jqueryFileTree.css"] []
+jfileTree_js  = StaticRoute ["jqueryFileTree","jqueryFileTree.js"] []
 
 data App = App { getStatic :: Static
                , httpManager :: Manager
@@ -44,7 +47,8 @@ mkYesod "App" [parseRoutes|
 /new NewR
 /job/#Text JobR GET
 /job-delete/#Text JobDeleteR GET
-/job-output/*OutputFile JobOutputR GET
+/job-output/#Text JobOutputR GET
+/job-files/#Text/*Texts JobFilesAjaxR POST GET
 /all-jobs AllJobsR GET
 |]
 
@@ -62,6 +66,7 @@ routeAuthorized r _write
     okRoutes (JobR _)       = True
     okRoutes (JobDeleteR _) = True
     okRoutes (JobOutputR _) = True
+    okRoutes (JobFilesAjaxR _ _) = True
     okRoutes AboutR         = True
     okRoutes _              = False
     loggedInRoutes QueueR = True
@@ -233,18 +238,19 @@ getAllJobsR = do
   jobs <- liftIO $ allJobs
   defaultLayout $(widgetFile "all-queue")
 
-checkAccess Nothing = notFound
+--checkAccess :: Maybe Job -> App Job
+checkAccess Nothing = notFound >> return Nothing
 checkAccess (Just job)
-    | isNullUserID (jobUser job) = return ()   -- Job submitted by anonymous user, only need the jobId to access it
+    | isNullUserID (jobUser job) = return Nothing   -- Job submitted by anonymous user, only need the jobId to access it
     | otherwise = do
   maid <- maybeAuthId
   case maid of
     Nothing -> if isNullUserID (jobUser job)   -- User not logged in, check the job was submitted by such a user
-               then return ()
-               else notFound
+               then return $ Just job
+               else notFound >> return Nothing
     Just user -> if adminUser user || user == jobUser job
-                 then return ()
-                 else notFound
+                 then return $ Just job
+                 else notFound >> return Nothing
 
 jobStatusText :: Job -> Text
 jobStatusText job = case jobStatus job of
@@ -295,48 +301,60 @@ handleNewR = do
         _ ->  defaultLayout $(widgetFile "new-job")
 
 
-data OutputFile = OutputFile JobID [Text]
-                | OutputZipped JobID
-                  deriving (Show,Eq,Read)
-instance PathMultiPiece OutputFile where
-    toPathMultiPiece (OutputFile j lst) = j : lst
-    toPathMultiPiece (OutputZipped j) = [j `T.append` ".zip"]
-
-    fromPathMultiPiece [j] =  case T.stripSuffix ".zip" j of
-                                   Nothing -> Just $ OutputFile j []
-                                   Just jId -> Just $ OutputZipped jId
-    fromPathMultiPiece (j:lst) =  Just $ OutputFile j lst
-    fromPathMultiPiece _ = Nothing
-
-fileName (OutputFile _ lst) = last lst
-fileName (OutputZipped _) = ""
-
 jobOutputLink, jobOutputZippedLink :: JobID -> Route App
-jobOutputLink jobId = JobOutputR $ OutputFile jobId []
-jobOutputZippedLink jobId = JobOutputR $ OutputZipped jobId
+jobOutputLink jobId = JobOutputR $ jobId
+jobOutputZippedLink jobId = JobOutputR $ T.append jobId ".zip"
 
-getJobOutputR :: OutputFile -> Handler RepHtml
-getJobOutputR (OutputZipped jobId) = do
-  mJob <- liftIO $ infoJob jobId
-  checkAccess mJob
-  file <- liftIO $ zippedOutput jobId
-  sendFile typeOctet file
-getJobOutputR (OutputFile jobId path) = do
-    checkValidPath path
-    mJob <- liftIO $ infoJob jobId
-    checkAccess mJob
-    case mJob of
-      Nothing -> notFound
-      Just _ -> sendFileOrListing
+getJobOutputR :: Text -> Handler RepHtml
+getJobOutputR pJobId
+    | ".zip" `T.isSuffixOf` pJobId = let Just jobId = T.stripSuffix ".zip" pJobId
+                                     in do Just job <- checkAccess =<< liftIO (infoJob jobId)
+                                           sendZippedOutput job
+    | otherwise = do
+        Just job <- checkAccess =<< liftIO (infoJob pJobId)
+        let jobId = pJobId
+        let empList = []   -- Can't seem to have this in the julius template!
+        defaultLayout $ fileListWidget >> $(widgetFile "output-browser")
+  where
+    sendZippedOutput job = do file <- liftIO $ zippedOutput (jobId job)
+                              sendFile typeOctet file
+
+    fileListWidget = do
+      addStylesheet $ StaticR jfileTree_css
+      addScript $ StaticR jfileTree_js
+
+
+outputFileAccess :: JobID -> [Text] -> Handler ActualFile
+outputFileAccess jobId dir = do
+    checkAccess =<< liftIO (infoJob jobId)
+    checkValidPath dir
+    file <- liftIO $ getActualFile jobId dir
+    return file
   where
     checkValidPath path = case filter (\f -> "." `T.isPrefixOf` f) path of
                             [] -> return ()
                             _ -> error "Invalid"
-    sendFileOrListing = do
-        file <- liftIO $ getActualFile jobId path
-        case file of
-          InvalidPath -> notFound
-          File filename -> sendFile typePlain filename
-          Directory filePaths -> let files = map (\f -> OutputFile jobId (path ++ [fromString f])) filePaths
-                                 in defaultLayout $(widgetFile "output-list")
+
+getJobFilesAjaxR :: Text -> [Text] -> Handler RepHtml
+getJobFilesAjaxR jobId dir = do
+  file <- outputFileAccess jobId dir
+  case file of
+    InvalidPath -> notFound
+    File filename -> sendFile typePlain filename
+    Directory _ -> notFound
+
+postJobFilesAjaxR :: Text -> [Text] -> Handler RepHtml
+postJobFilesAjaxR jobId _ = do
+  mDir <- lookupPostParam "dir"
+  case mDir of
+    Nothing -> notFound
+    Just dir -> do file <- outputFileAccess jobId (splitDir dir)
+                   case file of
+                     InvalidPath -> notFound
+                     File filename -> sendFile typePlain filename
+                     Directory filePaths -> let files = map toView filePaths
+                                            in hamletToRepHtml $(hamletFile "templates/output-files.hamlet")
+  where
+    splitDir dir = map T.pack $ splitDirectories $ T.unpack dir
+    toView (isDir, path) = (isDir,path,last $ splitDirectories path)
 
