@@ -1,0 +1,9 @@
+$(document).ready(function() {
+
+    /* Reload if job not finished */
+    if (#{jsPoll})
+       setTimeout(function() {
+                     document.location.reload(true);
+                   }, 30*1000);
+  }
+);

@@ -270,6 +270,7 @@ getJobR jobId = do
                     status = jobStatusText job
                     isAdmin = maybe False adminUser mAuthId
                     finished = case jobStatus job of { JobComplete _ -> True; _ -> False}
+                    jsPoll = if finished then "false" else "true" :: String
                 in defaultLayout $(widgetFile "job")
 
 getJobDeleteR :: JobID -> Handler RepHtml

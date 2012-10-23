@@ -32,6 +32,8 @@ $nothing
       <a href=@{jobOutputLink jobId}>Browse Output
     <div>
       <a href=@{jobOutputZippedLink jobId}>Download zipped output
+  $else
+    This page will refresh automatically.
   <div>
     <a href=@{JobDeleteR jobId}>Delete Job
 
