@@ -14,7 +14,8 @@ $(document).ready( function() {
    function openFile(file) {
      var area = $('#file_contents textarea')
      area.html("Loading...");
-     area.show();
+     $('#file_contents a').attr('href', script + '/' + file);
+     $('#file_contents').show();
      $.post(script, { dir: file }, function(data) {
          area.html(data);
        }

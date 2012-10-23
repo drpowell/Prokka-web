@@ -2,4 +2,5 @@
   <div class="row">
     <div class="span4" id="file_browser">
     <div class="span8" id="file_contents">
+      <a class="btn">Download File
       <textarea readonly="readonly">
