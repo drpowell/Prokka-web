@@ -302,6 +302,9 @@ handleNewR = do
         _ ->  defaultLayout $(widgetFile "new-job")
 
 
+----------------------------------------------------------------------
+-- Output file handling
+
 jobOutputLink, jobOutputZippedLink :: JobID -> Route App
 jobOutputLink jobId = JobOutputR $ jobId
 jobOutputZippedLink jobId = JobOutputR $ T.append jobId ".zip"
@@ -313,6 +316,7 @@ getJobOutputR pJobId
                                            sendZippedOutput job
     | otherwise = do
         Just job <- checkAccess =<< liftIO (infoJob pJobId)
+        root <- firstSubDir job
         let jobId = pJobId
         let empList = []   -- Can't seem to have this in the julius template!
         defaultLayout $ fileListWidget >> $(widgetFile "output-browser")
@@ -324,17 +328,19 @@ getJobOutputR pJobId
       addStylesheet $ StaticR jfileTree_css
       addScript $ StaticR jfileTree_js
 
+    firstSubDir job = do actual <- liftIO $ getActualFile pJobId ["/"]
+                         let root = "/"
+                         return $ case actual of
+                                    Directory files -> case filter fst files of
+                                                         ((True,f):_) -> f
+                                                         _ -> root
+                                    _ -> root
 
 outputFileAccess :: JobID -> [Text] -> Handler ActualFile
 outputFileAccess jobId dir = do
     checkAccess =<< liftIO (infoJob jobId)
-    checkValidPath dir
     file <- liftIO $ getActualFile jobId dir
     return file
-  where
-    checkValidPath path = case filter (\f -> "." `T.isPrefixOf` f) path of
-                            [] -> return ()
-                            _ -> error "Invalid"
 
 getJobFilesAjaxR :: Text -> [Text] -> Handler RepHtml
 getJobFilesAjaxR jobId dir = do

@@ -201,6 +201,8 @@ createJob mUserId ip params fileInfo = do
 
 data ActualFile = InvalidPath | Directory [(Bool, FilePath)] | File FilePath
 
+-- | Given a job, and a directory path relative to it, return either the abs path to that file, or
+-- the directory contents
 getActualFile :: JobID -> [Text] -> IO ActualFile
 getActualFile jobId subPathT
     | not (okFile $ getInfoName jobId) = return InvalidPath

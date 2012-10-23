@@ -1,6 +1,6 @@
 $(document).ready( function() {
     script = "@{JobFilesAjaxR jobId empList}";
-    $('#file_browser').fileTree({ root: '/',
+    $('#file_browser').fileTree({ root: "#{root}",
                                   script: script
                                 }, function(file) {
                                    openFile(file);
