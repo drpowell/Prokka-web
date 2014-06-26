@@ -1,5 +1,5 @@
 <h1>Login
 <div class=login>
-  <div id=browserid>Login using Mozilla BrowserID ^{browserId}
+  <div id=browserid>^{browserId}
   <strong>Or
   <div>^{googleEmail}
