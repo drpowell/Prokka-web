@@ -1,3 +1,4 @@
+<a href=@{JobR jobId}>Back to job status
 <h2>Job Output
   <div class="row">
     <div class="span4" id="file_browser">
