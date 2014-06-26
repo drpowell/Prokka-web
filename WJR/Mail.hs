@@ -35,22 +35,22 @@ emailBody job = LT.pack . renderHtml $ body myRender
 
 jobDoneEmail :: Job -> IO ()
 jobDoneEmail job
+  | isNullUserID (jobUser job) = return ()
   | M.lookup "email" (jobParams job) == Just "yes" = doSend
   | otherwise = return ()
   where
-  subject = "Job Finished!"
-  to = mkAddress (T.unpack $ jobUser job) (T.unpack $ jobUser job)
-  from = mkAddress "Prokka web service" "noreply@vicbioinformatics.com"
-  plainBody = emailBody job
-  doSend = renderSendMail $ Mail
-             { mailFrom = from
-             , mailTo   = [to]
-             , mailCc   = []
-             , mailBcc  = []
-             , mailHeaders = [ ("Subject",  subject) ]
-             , mailParts =
-                 [[ Part "text/plain; charset=utf-8" QuotedPrintableText Nothing []
-                  $ LT.encodeUtf8 plainBody
-                  ]]
-             }
-
+    subject = "Job Finished!"
+    to = mkAddress (T.unpack $ jobUser job) (T.unpack $ jobUser job)
+    from = mkAddress "Prokka web service" "noreply@vicbioinformatics.com"
+    plainBody = emailBody job
+    doSend = renderSendMail $ Mail
+               { mailFrom = from
+               , mailTo   = [to]
+               , mailCc   = []
+               , mailBcc  = []
+               , mailHeaders = [ ("Subject",  subject) ]
+               , mailParts =
+                   [[ Part "text/plain; charset=utf-8" QuotedPrintableText Nothing []
+                    $ LT.encodeUtf8 plainBody
+                    ]]
+               }
