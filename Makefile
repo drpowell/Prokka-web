@@ -21,5 +21,5 @@ all: $(BINARIES)
 
 clean:
 	rm -f *.o *.hi $(BINARIES)
-	find . \( -name '*.o' -o -name '*.hi' \) -exec rm {} \;
+	find WJR \( -name '*.o' -o -name '*.hi' \) -exec rm {} \;
 

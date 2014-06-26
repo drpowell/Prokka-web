@@ -1,7 +1,7 @@
 #!/bin/sh
 
 make clean
-make PRODUCTION=1
+cabal exec make PRODUCTION=1
 
 sudo -u prokka  mkdir -p ~prokka/bin ~prokka/user-files/uploads ~prokka/user-files/status ~prokka/user-files/output
 sudo -u prokka cp -f prokka-web prokka-runner ~prokka/bin

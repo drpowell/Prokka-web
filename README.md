@@ -16,4 +16,4 @@ cabal exec make
 Installing
 =========
 
-cabal exec ./install.sh
+./install.sh
