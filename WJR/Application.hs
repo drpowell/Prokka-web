@@ -14,11 +14,12 @@ import Network.Wai
 import System.FilePath (splitDirectories)
 -- import Network.Wai.Handler.CGI as CGI
 
+import Text.Julius
 import Yesod.Auth
 import Yesod.Auth.BrowserId
 import Yesod.Auth.GoogleEmail
 import qualified Web.ClientSession as CS
-import Network.HTTP.Conduit (Manager,newManager,def)
+import Network.HTTP.Conduit (Manager,newManager)
 import Network.Gravatar as G
 
 import WJR.AdminUsers (adminUser)
@@ -26,7 +27,7 @@ import WJR.Settings
 import WJR.Jobs
 import WJR.ParamDefs
 
-bootstrap_css, bootstrap_js, jquery_js :: Route Static
+bootstrap_css, bootstrap_js, jquery_js, jfileTree_css, jfileTree_js :: Route Static
 bootstrap_css = StaticRoute ["bootstrap.css"]        []
 bootstrap_js  = StaticRoute ["bootstrap-tooltip.js"] []
 jquery_js     = StaticRoute ["jquery-1.7.2.min.js"]  []
@@ -118,6 +119,7 @@ instance Yesod App where
     maximumContentLength _ (Just NewR) = 2 * 1024 * 1024 * 1024 -- 2 gigabytes
     maximumContentLength _ _ = 2 * 1024 * 1024 -- 2 megabytes
 
+defGravatar :: GravatarOptions
 defGravatar = G.defaultConfig { gSize = Just $ Size 30
                               , gDefault = Just MM
                               }
@@ -148,7 +150,7 @@ instance RenderMessage App FormMessage where
     renderMessage _ _ = defaultFormMessage
 
 
-
+defaultMain :: IO ()
 defaultMain = do
   st <- static "static"
   man <- newManager def
@@ -160,18 +162,21 @@ defaultMain = do
 
 
 -- | Convert a "Field" that uses a Bool, to use a Text yes/no instead
-fieldBoolToText :: RenderMessage m FormMessage => Field s m Bool -> Field s m Text
-fieldBoolToText (Field parser viewer) = Field parser' viewer'
+-- fieldBoolToText :: RenderMessage m FormMessage => Field s m Bool -> Field s m Text
+fieldBoolToText :: Field sub master Bool -> Field sub master Text
+fieldBoolToText fld = fld {fieldParse=parser', fieldView=viewer' }
     where
       showB True = "yes"
       showB False = "no"
       readB "yes" = True
       readB _ = False
-      parser' x = do r <- parser x
-                     return $ case r of
-                       Right (Just b) -> Right . Just . showB $ b
-                       Right Nothing -> Right Nothing
-                       Left m -> Left m
+      parser = fieldParse fld
+      viewer = fieldView fld
+      parser' x y = do r <- parser x y
+                       return $ case r of
+                         Right (Just b) -> Right . Just . showB $ b
+                         Right Nothing -> Right Nothing
+                         Left m -> Left m
       viewer' id name attrs valOrErr req =
           let toB = case valOrErr of {Left x -> Left x; Right b -> Right (readB b)}
           in viewer id name attrs toB req
@@ -238,7 +243,7 @@ getAllJobsR = do
   jobs <- liftIO $ allJobs
   defaultLayout $(widgetFile "all-queue")
 
---checkAccess :: Maybe Job -> App Job
+-- checkAccess :: Maybe Job -> App
 checkAccess Nothing = notFound >> return Nothing
 checkAccess (Just job)
     | isNullUserID (jobUser job) = return Nothing   -- Job submitted by anonymous user, only need the jobId to access it
@@ -270,7 +275,7 @@ getJobR jobId = do
                     status = jobStatusText job
                     isAdmin = maybe False adminUser mAuthId
                     finished = case jobStatus job of { JobComplete _ -> True; _ -> False}
-                    jsPoll = if finished then "false" else "true" :: String
+                    jsPoll = rawJS (if finished then "false" else "true" :: String)
                 in defaultLayout $(widgetFile "job")
 
 getJobDeleteR :: JobID -> Handler RepHtml
@@ -316,7 +321,7 @@ getJobOutputR pJobId
                                            sendZippedOutput job
     | otherwise = do
         Just job <- checkAccess =<< liftIO (infoJob pJobId)
-        root <- firstSubDir job
+        root <- rawJS <$> firstSubDir
         let jobId = pJobId
         let empList = []   -- Can't seem to have this in the julius template!
         defaultLayout $ fileListWidget >> $(widgetFile "output-browser")
@@ -328,7 +333,7 @@ getJobOutputR pJobId
       addStylesheet $ StaticR jfileTree_css
       addScript $ StaticR jfileTree_js
 
-    firstSubDir job = do actual <- liftIO $ getActualFile pJobId ["/"]
+    firstSubDir     = do actual <- liftIO $ getActualFile pJobId ["/"]
                          let root = "/"
                          return $ case actual of
                                     Directory files -> case filter fst files of
@@ -365,4 +370,3 @@ postJobFilesAjaxR jobId _ = do
     splitDir dir = map T.pack $ splitDirectories $ T.unpack dir
     toView (isDir, path) = let dirs = splitDirectories path
                            in (isDir, path, last dirs, JobFilesAjaxR jobId (map T.pack dirs))
-

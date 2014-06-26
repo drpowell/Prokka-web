@@ -1,3 +1,5 @@
+.cabal-sandbox/
+dist/
 *.hi
 *.o
 prokka-runner

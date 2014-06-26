@@ -1,5 +1,5 @@
 
-H_OPTS=-W -O2 -threaded -L/usr/lib
+H_OPTS=-W -O2 -threaded -L/usr/lib -fwarn-missing-signatures
 ifdef PROF
 H_OPTS+=-prof -auto-all -L/usr/lib
 endif
