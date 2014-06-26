@@ -246,13 +246,12 @@ getAllJobsR = do
 -- checkAccess :: Maybe Job -> App
 checkAccess Nothing = notFound >> return Nothing
 checkAccess (Just job)
-    | isNullUserID (jobUser job) = return Nothing   -- Job submitted by anonymous user, only need the jobId to access it
+    | isNullUserID (jobUser job) = return $ Just job  -- Job submitted by anonymous user, only need the jobId to access it
     | otherwise = do
   maid <- maybeAuthId
   case maid of
-    Nothing -> if isNullUserID (jobUser job)   -- User not logged in, check the job was submitted by such a user
-               then return $ Just job
-               else notFound >> return Nothing
+    Nothing -> -- User not logged in, and already checked it is a non-anonymous job
+               notFound >> return Nothing
     Just user -> if adminUser user || user == jobUser job
                  then return $ Just job
                  else notFound >> return Nothing
